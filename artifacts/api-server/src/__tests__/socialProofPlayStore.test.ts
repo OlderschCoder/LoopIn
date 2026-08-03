@@ -83,15 +83,19 @@ function stopServer(): Promise<void> {
 let savedPlayId: string | undefined;
 let savedAppId: string | undefined;
 let savedAppFollowKey: string | undefined;
+let savedServiceAccount: string | undefined;
 
 beforeEach(async () => {
   savedPlayId = process.env.GOOGLE_PLAY_APP_ID;
   savedAppId = process.env.APP_STORE_APP_ID;
   savedAppFollowKey = process.env.APPFOLLOW_API_KEY;
+  savedServiceAccount = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
 
-  // Ensure no App Store interference and no AppFollow key — scraper path only
+  // Ensure no App Store interference, no AppFollow key, no service-account
+  // credentials — scraper path only, no real network calls made
   delete process.env.APP_STORE_APP_ID;
   delete process.env.APPFOLLOW_API_KEY;
+  delete process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
 
   mockGplayApp.mockReset();
   // Scheduler has never run (null) → stale-data policy does NOT block live data
@@ -111,6 +115,10 @@ afterEach(async () => {
   if (savedAppFollowKey !== undefined)
     process.env.APPFOLLOW_API_KEY = savedAppFollowKey;
   else delete process.env.APPFOLLOW_API_KEY;
+
+  if (savedServiceAccount !== undefined)
+    process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON = savedServiceAccount;
+  else delete process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

@@ -3,6 +3,7 @@ name: Clerk v5 hook API change
 description: In @clerk/expo 3.x (Clerk v5), useSignIn()/useSignUp() lose isLoaded, and useAuth().isSignedIn can go stale after setActive().
 ---
 
+
 ## Rule 1 — isLoaded missing from useSignIn/useSignUp
 Never use `isLoaded` from `useSignIn()` or `useSignUp()` in @clerk/expo 3.x.
 

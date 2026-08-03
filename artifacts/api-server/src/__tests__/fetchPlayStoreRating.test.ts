@@ -39,16 +39,21 @@ const mockApp = gplay.app as ReturnType<typeof vi.fn>;
 
 describe("fetchPlayStoreRating — google-play-scraper fallback (no APPFOLLOW_API_KEY)", () => {
   let savedKey: string | undefined;
+  let savedSA: string | undefined;
 
   beforeEach(() => {
     savedKey = process.env.APPFOLLOW_API_KEY;
+    savedSA = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
     delete process.env.APPFOLLOW_API_KEY;
+    delete process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
     mockApp.mockReset();
   });
 
   afterEach(() => {
     if (savedKey !== undefined) process.env.APPFOLLOW_API_KEY = savedKey;
     else delete process.env.APPFOLLOW_API_KEY;
+    if (savedSA !== undefined) process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON = savedSA;
+    else delete process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
   });
 
   it("returns { rating, reviewCount } from a normal scraper response", async () => {
@@ -121,10 +126,13 @@ describe("fetchPlayStoreRating — google-play-scraper fallback (no APPFOLLOW_AP
 
 describe("fetchPlayStoreRating — AppFollow official path (APPFOLLOW_API_KEY set)", () => {
   let savedKey: string | undefined;
+  let savedSA: string | undefined;
 
   beforeEach(() => {
     savedKey = process.env.APPFOLLOW_API_KEY;
+    savedSA = process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
     process.env.APPFOLLOW_API_KEY = "test-appfollow-key";
+    delete process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
     mockApp.mockReset();
     vi.stubGlobal("fetch", vi.fn());
   });
@@ -133,6 +141,8 @@ describe("fetchPlayStoreRating — AppFollow official path (APPFOLLOW_API_KEY se
     vi.unstubAllGlobals();
     if (savedKey !== undefined) process.env.APPFOLLOW_API_KEY = savedKey;
     else delete process.env.APPFOLLOW_API_KEY;
+    if (savedSA !== undefined) process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON = savedSA;
+    else delete process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON;
   });
 
   it("returns AppFollow data when the API responds successfully", async () => {

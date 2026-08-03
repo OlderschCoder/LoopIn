@@ -1,10 +1,18 @@
 ---
 name: GitHub LoopIn repo push setup
-description: How this workspace pushes to github.com/OlderschCoder/LoopIn (SSH key, history reset, secret scrubbing)
+description: Durable constraints for pushing this workspace to the GitHub remote.
 ---
 
-- Remote `origin` = git@github.com:OlderschCoder/LoopIn.git via a dedicated SSH deploy key. Key lives in `.local/ssh/github_loopin` (gitignored); after a Replit restart run `bash .local/ssh/restore-ssh-key.sh` to reinstall it into `~/.ssh`.
-- The Replit gitPush/gitPull callbacks were unusable for this repo (stale OAuth to the old SafeDateAI repo); use plain `git push origin main` over SSH instead.
-- Git history was re-initialized (single fresh commit, Aug 2026) because the old object store had missing objects from task-agent subrepl remotes and GitHub rejected packs.
-- **GitHub push protection blocks any commit containing real keys.** Never let credentials live in `.replit` `[userenv.shared]` — keep Twilio/Telnyx values in Replit Secrets. `.replit` now has empty strings there intentionally.
-- CI (`.github/workflows/android.yml`) must pin pnpm to the same major as the lockfile (currently 10.26.1) or `--frozen-lockfile` fails with an "overrides" mismatch.
+## Rule — credentials must never be committed
+Never let real Twilio/Telnyx/Google credential values appear in `.replit` `[userenv.shared]`. Keep them in Replit Secrets only; `.replit` must have empty strings as placeholders.
+
+**Why:** GitHub push protection blocks any commit containing real credential values; the push must be force-amended before it can land.
+
+**How to apply:** Before any commit touching `.replit`, confirm all `[userenv.shared]` values are empty strings (`""`).
+
+## Rule — pnpm version in CI must match the lockfile major
+CI workflows that run `pnpm install --frozen-lockfile` must pin pnpm to the same major version as the checked-in lockfile, or the install rejects the lockfile outright.
+
+**Why:** pnpm changed the `overrides` field format between major versions; a mismatched major silently breaks `--frozen-lockfile`.
+
+**How to apply:** When bumping pnpm in CI, update the lockfile at the same time, and vice-versa.

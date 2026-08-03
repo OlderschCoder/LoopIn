@@ -63,8 +63,6 @@ import {
   type StoreResult,
 } from "../lib/storeRatings";
 import { getRefreshStatus } from "../jobs/refreshRatings";
-
-
 const router: IRouter = Router();
 
 // ── Route ─────────────────────────────────────────────────────────────────────
