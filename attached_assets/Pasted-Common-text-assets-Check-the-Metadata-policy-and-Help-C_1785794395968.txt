@@ -1,0 +1,105 @@
+Common text assets
+*
+Check the Metadata policy and Help Center guidance to avoid common issues with your store listing. Review all program policies before submitting your app.
+
+If you're eligible to provide advance notice to the app review team, contact us before publishing your store listing.
+
+App name
+ 
+*
+This is how your app will appear on Google Play
+LoopIn
+ 
+
+6 / 30
+Text is 6 characters out of 30
+Short description
+ 
+*
+Users can expand to view your full description.
+Your personal safety layer: masked number, check-ins, SOS & AI safety coach.
+ 
+
+76 / 80
+Text is 76 characters out of 80
+Full description
+ 
+*
+Safety that stays with you. After the introduction.
+
+LoopIn is private safety technology for real life — dates, rides, campus walks, travel, and meeting anyone new. Nine tools. One safety layer.
+
+🔒 Masked Private Line Text and call anyone without ever sharing your real number. Get a dedicated private number for dating apps, marketplace meetups, or anyone you're not ready to trust with your real contact info.
+
+⏰ Check-Ins & Safety Timer Heading out? Set a check-in. If you don't confirm you're safe, your Trusted Crew is automatically alerted with your last known location and your plans.
+
+🚶 Walk With Me Walking home or taking a ride? Start a timer. If you don't confirm arrival, alerts go out automatically.
+
+👥 Trusted Crew Build your circle of trusted contacts. They get automatic alerts, your location, and your status — only when it matters.
+
+🆘 One-Tap SOS Emergency button that calls 911, alerts your Trusted Crew, and guides you through calming breathing exercises — all in one tap.
+
+📞 Fake Call Escape Need an exit? Schedule a realistic incoming call to gracefully leave any uncomfortable situation.
+
+🤖 AI Safety Coach Your 24/7 wingwoman. Get help spotting red flags in dating profiles, planning safe first meetings, and talking through anything that feels off.
+
+🗂️ Safety Vault Securely save voice notes, call recordings, and screenshots in a private, searchable timeline. Your evidence, organized and protected.
+ 
+
+1432 / 4000
+Text is 1432 characters out of 4000
+Common visual assets
+*
+Manage your app icon, screenshots, and videos to promote your app on Google Play. Review the content guidelines before uploading new graphics. If you add translations for your store listing without localized graphics, we will use the graphics from your default language.
+
+App icon
+ 
+*
+Your app icon must be a PNG or JPEG, up to 1 MB, 512 px by 512 px, and meet our design specifications and metadata policy
+Upload at least 1 asset
+Feature graphic
+ 
+*
+Your featured graphic must be a PNG or JPEG, up to 15 MB, and 1,024 px by 500 px. This graphic will be used when you choose to feature your app. Learn more
+Upload at least 1 asset
+Video
+Add a video by entering a YouTube URL. This video must be public or unlisted, ads must be turned off, and it must not be age restricted.
+https://www.youtube.com/watch?v=
+ 
+
+Phone assets
+*
+Phone screenshots
+ 
+*
+Upload 2-8 phone screenshots. Screenshots must be PNG or JPEG, up to 8 MB each, 16:9 or 9:16 aspect ratio, with each side between 320 px and 3,840 px
+Upload at least 2 phone or tablet screenshots
+To be eligible for promotion, include at least 4 screenshots at a minimum of 1080 px on each side.
+Tablet assets
+*
+7-inch tablet screenshots
+ 
+*
+Upload up to eight 7-inch tablet screenshots. Screenshots must be PNG or JPEG, up to 8 MB each, 16:9 or 9:16 aspect ratio, with each side between 320 px and 3,840 px
+Upload at least 2 phone or tablet screenshots
+10-inch tablet screenshots
+ 
+*
+Upload up to eight 10-inch tablet screenshots. Screenshots must be PNG or JPEG, up to 8 MB each, 16:9 or 9:16 aspect ratio, with each side between 1,080 px and 7,680 px
+Upload at least 2 phone or tablet screenshots
+Chromebook assets
+Chromebook screenshots
+Upload 4-8 screenshots. Screenshots must be PNG or JPEG, up to 8 MB each, 16:9 or 9:16 aspect ratio, with each side between 1,080 px and 7,680 px
+Android XR assets
+Android XR screenshots
+Upload 4-8 screenshots. Screenshots must be PNG or JPEG, up to 15 MB each, 16:9 or 9:16 aspect ratio, with each side between 720 px and 7,680 px
+Spatial XR video
+Add a spatial XR video for an immersive preview of your features by entering a YouTube URL. This video must be in 360°, 180°, or 3D, be public or unlisted, ads must be turned off, and it must not be age restricted.
+https://www.youtube.com/watch?v=
+ 
+
+Non-spatial XR video
+Add a non-spatial XR video by entering a YouTube URL. This video must be public or unlisted, ads must be turned off, and it must not be age restricted.
+https://www.youtube.com/watch?v=
+ 
+

@@ -29,3 +29,17 @@ id = "9treWSi_-ezvxpFdPdSm9"
 uri = "file://exports/LoopIn-One-Pager.pdf"
 type = "pdf"
 title = "LoopIn Marketing One-Pager (4 pages)"
+
+[[outputs]]
+id = "rN548m-APgmUkcuuJfy7x"
+uri = "file://play-store-assets/icon-512.png"
+type = "image"
+title = "Play Store icon (512×512)"
+description = "App icon for the Google Play listing — upload under Store listing → App icon."
+
+[[outputs]]
+id = "Pa1BCHzq2Z9CZ1v_Z5ppd"
+uri = "file://play-store-assets/feature-graphic-1024x500.png"
+type = "image"
+title = "Feature graphic (1024×500)"
+description = "Feature graphic for the Google Play listing — upload under Store listing → Feature graphic."
