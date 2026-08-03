@@ -26,7 +26,9 @@ rg -n "mobile://" artifacts/mobile artifacts/api-server   # must return no app-c
 
 ## Notes
 
-- Clerk dashboard: allowed redirect URLs must include `loopin://sso-callback`
-  (remove the old `mobile://sso-callback` entry once verified).
+- Clerk allowed redirect URLs: ✅ done (2026-08-03, via Clerk Backend API — this is a
+  Replit-managed Clerk instance with no dashboard access). Registered `loopin://`,
+  `loopin:///sso-callback` (what `Linking.createURL` emits in standalone builds), and
+  `loopin://sso-callback`; deleted all three stale `mobile://` entries.
 - Server side (api-server, Twilio webhooks) sends no custom-scheme URLs — verified
   by the grep above — so no backend changes are needed for the rename.
