@@ -8,4 +8,5 @@
 - [GitHub LoopIn push](github-loopin-push.md) — push via SSH deploy key in `.local/ssh` (restore script after restart); Replit git callbacks broken for this repo; never put keys in `.replit` userenv; pin pnpm in CI.
 - [Android release signing](android-release-signing.md) — keystore in `.local/android-signing/`; GITHUB_TOKEN shadowed by Replit system token (use GH_PAT); release bundling needs babel-preset-expo declared; verify with apksigner not jarsigner.
 - [Clerk live-key EAS builds](clerk-eas-live-key.md) — mobile builds pointing at prod API need prod's pk_live publishable key in EAS env, not the dev pk_test; mismatched instance issuer silently 401s.
+- [Play Store screenshot capture](play-store-screenshot-capture.md) — headless Clerk sign-in on Expo web needs 2FA code 424242 (needs_client_trust); seed `u:<uid>:*` localStorage for populated screens.
 - [LoopIn app-store identifiers](loopin-identifiers.md) — slug=loopin, scheme=loopin, bundle=com.markbojeun.loopin (all renamed); EAS re-link needed after slug change.
