@@ -85,6 +85,20 @@ jobs:
             -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
             -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
 
+      - name: Build release AAB for Google Play (signed)
+        if: github.event.inputs.build_type == 'release'
+        working-directory: artifacts/mobile/android
+        env:
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: |
+          ./gradlew bundleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file=$(pwd)/loopin.keystore \
+            -Pandroid.injected.signing.store.password="$STORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
+
       # ── Upload APK ──────────────────────────────────────────────────────────
       - name: Upload debug APK
         if: github.event.inputs.build_type != 'release'
@@ -100,4 +114,12 @@ jobs:
         with:
           name: loopin-release-${{ github.run_number }}
           path: artifacts/mobile/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 90
+
+      - name: Upload release AAB (for Google Play)
+        if: github.event.inputs.build_type == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: loopin-release-aab-${{ github.run_number }}
+          path: artifacts/mobile/android/app/build/outputs/bundle/release/app-release.aab
           retention-days: 90
