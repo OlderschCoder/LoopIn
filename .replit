@@ -41,11 +41,3 @@ externalPort = 3002
 
 [nix]
 channel = "stable-25_05"
-
-[userenv]
-
-[userenv.shared]
-TWILIO_ACCOUNT_SID = ""
-TWILIO_WEBHOOK_SECRET = ""
-TELNYX_API_KEY = ""
-TELNYX_APP_ID = ""
