@@ -60,6 +60,11 @@ _Populate as you build — explicit user instructions worth remembering across s
 - Safety score is calculated client-side in `app/plan/new.tsx` (no server call needed)
 - The landing site embeds the live app at `/demo` (iframe in `PhoneMockup.tsx`). It is a static Expo web export in `artifacts/landing/public/demo`. To regenerate: in `artifacts/mobile/app.json` set `experiments.baseUrl: "/demo"` + `reactCompiler: false`, run `expo export --platform web`, copy `dist/` → `landing/public/demo/`, then revert app.json. See memory `expo-web-embed-subpath.md` for the full recipe (Vite dev middleware + `/demo/*` prod rewrite).
 
+## Android signing key
+
+- The release keystore + passwords live in `.local/android-signing/` (`loopin.keystore`, `SECRETS.txt`) — gitignored, so they exist ONLY in this workspace and as the `ANDROID_KEYSTORE_BASE64`/password secrets on the GitHub repo (secrets cannot be read back out of GitHub).
+- The user keeps an offline backup of the keystore and passwords outside Replit. If the workspace copy is lost, restore from that backup — a new keystore would make app updates uninstallable over existing installs.
+
 ## Pointers
 
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
