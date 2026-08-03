@@ -1,0 +1,111 @@
+{
+  "expo": {
+    "name": "LoopIn",
+    "slug": "safedate-ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "mobile",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0E0A1E"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.markbojeun.safedateai",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "location"
+        ],
+        "NSLocationWhenInUseUsageDescription": "LoopIn uses your location during active dates so trusted contacts can find you if you miss a check-in.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "LoopIn keeps your location history on your account so you and your trusted circle can see where you've been, even while the app is in the background.",
+        "NSMicrophoneUsageDescription": "LoopIn lets you privately record audio during a date as personal evidence, stored only on your device.",
+        "NSPhotoLibraryUsageDescription": "LoopIn lets you save a match's profile photos and screenshots privately on your device.",
+        "NSCameraUsageDescription": "LoopIn lets you snap a photo of a match's profile to keep privately on your device."
+      }
+    },
+    "android": {
+      "package": "com.markbojeun.safedateai",
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "LoopIn keeps your location history on your account so you and your trusted circle can see where you've been, even while the app is in the background.",
+          "locationWhenInUsePermission": "LoopIn uses your location during active dates so trusted contacts can find you if you miss a check-in.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#7C3AED",
+          "sounds": []
+        }
+      ],
+      "expo-audio",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "LoopIn lets you save a match's profile photos and screenshots privately on your device.",
+          "cameraPermission": "LoopIn lets you snap a photo of a match's profile to keep privately on your device."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "packagingOptions": {
+              "exclude": ["META-INF/versions/9/OSGI-INF/MANIFEST.MF"]
+            }
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b1f25b55-2054-4aef-a61b-47a7fbf38710"
+      }
+    },
+    "owner": "mark_bojeun",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/b1f25b55-2054-4aef-a61b-47a7fbf38710"
+    }
+  }
+}

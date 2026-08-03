@@ -1,0 +1,31 @@
+uploads = []
+
+[[generated]]
+id = "NyGSRAhclr6455hNPK-Sh"
+uri = "file://artifacts/mobile/assets/images/icon.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "Tw8-E-Sv2txy8Vp_uIUfR"
+uri = "file://artifacts/mobile/assets/images/splash.png"
+type = "image"
+title = "generated_image"
+
+[[outputs]]
+id = "F9N90ekkAaXf0BXjn1exI"
+uri = "file://artifacts/promo-video/public/audio/bg_music.mp3"
+type = "audio"
+title = "background music"
+
+[[outputs]]
+id = "AgNodiTzaxIgo4ydAcarn"
+uri = "file://exports/SafeDate-AI-One-Pager.pdf"
+type = "pdf"
+title = "SafeDate AI — Investor One-Pager (PDF)"
+
+[[outputs]]
+id = "9treWSi_-ezvxpFdPdSm9"
+uri = "file://exports/LoopIn-One-Pager.pdf"
+type = "pdf"
+title = "LoopIn Marketing One-Pager (4 pages)"

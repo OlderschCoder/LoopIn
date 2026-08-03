@@ -1,0 +1,8 @@
+- [Expo EAS builds on Replit](expo-eas-replit.md) — SafeDate AI can't run in Expo Go (push removed SDK 53+); use EAS Build. Set EAS_NO_VCS=1; never `pnpm add` expo-* (use `expo install`).
+- [Expo web React dedup](expo-web-react-dedup.md) — Expo web blank / "multiple copies of React" came from a 2nd React major elsewhere in the pnpm monorepo; keep all packages on one React via `catalog:`.
+- [Embed Expo web at a subpath](expo-web-embed-subpath.md) — landing `/demo` embeds the app via `expo export` w/ `experiments.baseUrl`; needs a Vite dev middleware (Vite refuses `/node_modules/` URLs) + `/demo/*` prod rewrite. Never hand-rewrite the bundle; reactCompiler:true hangs export.
+- [Offline-first per-account sync](offline-first-account-sync.md) — namespace AsyncStorage by userId, guard async sync vs account switch, gate pushes on syncReady, never sync device-local file URIs (recordings).
+- [Server AI integration](ai-integration-setup.md) — api-server AI routes use the Replit OpenAI integration (AI_INTEGRATIONS_OPENAI_* + model gpt-5.4), not a user OPENAI_API_KEY; provision via setupReplitAIIntegrations.
+- [Twilio private number](twilio-private-number.md) — per-user proxy number (text + masked recorded calls); webhooks secret-gated (proxy hides sig), number↔user unique in DB to prevent cross-user leak, useMemo the API hook.
+- [Clerk v5 hook API change](clerk-v5-hooks.md) — @clerk/expo 3.x removed isLoaded from useSignIn/useSignUp; use useAuth().isLoaded instead.
+- [Clerk live-key EAS builds](clerk-eas-live-key.md) — mobile builds pointing at prod API need prod's pk_live publishable key in EAS env, not the dev pk_test; mismatched instance issuer silently 401s.
