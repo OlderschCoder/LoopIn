@@ -1,11 +1,11 @@
 {
   "expo": {
     "name": "LoopIn",
-    "slug": "safedate-ai",
+    "slug": "loopin",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
+    "scheme": "loopin",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.markbojeun.safedateai",
+      "bundleIdentifier": "com.markbojeun.loopin",
       "infoPlist": {
         "UIBackgroundModes": [
           "location"
@@ -28,7 +28,7 @@
       }
     },
     "android": {
-      "package": "com.markbojeun.safedateai",
+      "package": "com.markbojeun.loopin",
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
