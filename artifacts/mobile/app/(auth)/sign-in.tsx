@@ -56,7 +56,10 @@ export default function SignInScreen() {
         (res) => { linkingResolve = res; },
       );
       const linkingSub = Linking.addEventListener("url", ({ url }) => {
-        if (url.startsWith("mobile://")) linkingResolve(url);
+        // Match the app's current scheme (loopin://) — derived from redirectUrl
+        // so a future scheme rename can't silently break this listener again.
+        const schemePrefix = redirectUrl.split("sso-callback")[0];
+        if (url.startsWith(schemePrefix)) linkingResolve(url);
       });
 
       // Open the browser for Google OAuth
