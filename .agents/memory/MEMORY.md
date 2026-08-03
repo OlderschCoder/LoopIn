@@ -5,4 +5,5 @@
 - [Server AI integration](ai-integration-setup.md) — api-server AI routes use the Replit OpenAI integration (AI_INTEGRATIONS_OPENAI_* + model gpt-5.4), not a user OPENAI_API_KEY; provision via setupReplitAIIntegrations.
 - [Twilio private number](twilio-private-number.md) — per-user proxy number (text + masked recorded calls); webhooks secret-gated (proxy hides sig), number↔user unique in DB to prevent cross-user leak, useMemo the API hook.
 - [Clerk v5 hook API change](clerk-v5-hooks.md) — @clerk/expo 3.x removed isLoaded from useSignIn/useSignUp; use useAuth().isLoaded instead.
+- [GitHub LoopIn push](github-loopin-push.md) — push via SSH deploy key in `.local/ssh` (restore script after restart); Replit git callbacks broken for this repo; never put keys in `.replit` userenv; pin pnpm in CI.
 - [Clerk live-key EAS builds](clerk-eas-live-key.md) — mobile builds pointing at prod API need prod's pk_live publishable key in EAS env, not the dev pk_test; mismatched instance issuer silently 401s.
