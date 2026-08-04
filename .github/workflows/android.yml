@@ -19,6 +19,12 @@ jobs:
     name: Build Android APK
     runs-on: ubuntu-latest
 
+    # EXPO_PUBLIC_* values are inlined into the JS bundle, which Gradle creates
+    # during assemble/bundle — NOT during prebuild. They must be set job-wide or
+    # the shipped app gets `undefined` with no build-time warning.
+    env:
+      EXPO_PUBLIC_API_URL: https://safe-date-ai-1.replit.app
+
     steps:
       # ── Checkout ────────────────────────────────────────────────────────────
       - name: Checkout repository
@@ -49,8 +55,6 @@ jobs:
       # ── Expo prebuild (generates the android/ native project) ───────────────
       - name: Prebuild Android native project
         working-directory: artifacts/mobile
-        env:
-          EXPO_PUBLIC_API_URL: https://safe-date-ai-1.replit.app
         run: npx expo prebuild --platform android --no-install --clean
 
       # ── Gradle cache ────────────────────────────────────────────────────────

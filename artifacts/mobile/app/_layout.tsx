@@ -45,24 +45,43 @@ function useClerkPublishableKey(): {
   const [keyError, setKeyError] = React.useState<string | null>(null);
 
   useEffect(() => {
-    if (envPublishableKey || !API_BASE_URL) return;
+    if (envPublishableKey) return;
+
+    // No API URL baked in means there is nowhere to fetch the key from. Surface
+    // it immediately rather than sitting on the splash screen forever.
+    if (!API_BASE_URL) {
+      setKeyError(
+        "This build is missing its server address, so it can't sign you in. Please reinstall the latest version.",
+      );
+      return;
+    }
+
     let cancelled = false;
     (async () => {
       for (let attempt = 0; attempt < 3; attempt++) {
+        // A stalled network request never rejects on its own, so bound it.
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
         try {
-          const res = await fetch(`${API_BASE_URL}/api/auth/config`);
+          const res = await fetch(`${API_BASE_URL}/api/auth/config`, {
+            signal: controller.signal,
+          });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const data = (await res.json()) as { clerkPublishableKey?: string };
           if (!data.clerkPublishableKey) throw new Error("No key in response");
           if (!cancelled) setFetchedKey(data.clerkPublishableKey);
           return;
-        } catch (err) {
-          if (attempt === 2 && !cancelled) {
+        } catch {
+          if (cancelled) return;
+          if (attempt === 2) {
             setKeyError(
               "Could not reach the server. Check your internet connection and reopen the app.",
             );
+            return;
           }
           await new Promise((r) => setTimeout(r, 1500));
+        } finally {
+          clearTimeout(timeoutId);
         }
       }
     })();
