@@ -226,20 +226,26 @@ function AuthGate() {
   // (stays stale after setActive() in some flows). We subscribe directly to
   // Clerk's low-level listener instead, which is the primitive every hook
   // internally relies on and is guaranteed to fire on session changes.
-  const [state, setState] = React.useState(() => ({
-    loaded: !!clerk.loaded,
-    signedIn: !!clerk.session,
-  }));
+  //
+  // The listener only forces a re-render — it must NOT be the source of truth.
+  // `setActive()` populates `clerk.session` synchronously, but a listener-driven
+  // setState lands a tick later. Navigation after sign-in is immediate, so the
+  // redirect effect below would run while state still said "signed out" and
+  // bounce the user straight back to the login screen. Reading the Clerk
+  // singleton during render keeps the gate consistent with what actually
+  // happened.
+  const [, forceRender] = React.useReducer((n: number) => n + 1, 0);
 
   useEffect(() => {
-    const unsubscribe = clerk.addListener((resources: any) => {
-      setState({ loaded: true, signedIn: !!resources.session });
-    });
+    const unsubscribe = clerk.addListener(() => forceRender());
     return unsubscribe;
   }, [clerk]);
 
+  const loaded = !!clerk.loaded;
+  const signedIn = !!clerk.session;
+
   useEffect(() => {
-    if (!state.signedIn || !clerk.session) return;
+    if (!signedIn || !clerk.session) return;
     // Verify the cached session is actually still valid server-side.
     // If the underlying user was deleted, sign out so the user can
     // re-authenticate cleanly instead of being stuck showing stale state.
@@ -261,17 +267,18 @@ function AuthGate() {
         console.warn("Session verification failed (non-fatal):", err);
       }
     });
-  }, [state.signedIn, clerk]);
+  }, [signedIn, clerk]);
+
+  const inAuthGroup = segments[0] === "(auth)";
 
   useEffect(() => {
-    if (!state.loaded) return;
-    const inAuthGroup = segments[0] === "(auth)";
-    if (!state.signedIn && !inAuthGroup) {
+    if (!loaded) return;
+    if (!signedIn && !inAuthGroup) {
       router.replace("/(auth)/sign-in");
-    } else if (state.signedIn && inAuthGroup) {
+    } else if (signedIn && inAuthGroup) {
       router.replace("/(tabs)");
     }
-  }, [state, segments, router]);
+  }, [loaded, signedIn, inAuthGroup, router]);
 
   return <RootLayoutNav />;
 }
