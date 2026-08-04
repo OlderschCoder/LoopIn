@@ -52,11 +52,17 @@ export default function SignUpScreen() {
     setBusy(true);
     try {
       const result = await clerk.client!.signUp.attemptEmailAddressVerification({ code });
-      if (result.status === "complete") {
+      // Clerk sometimes hands back a usable session without reporting
+      // "complete" (e.g. extra optional fields outstanding) — take it either way.
+      if (result.status === "complete" || result.createdSessionId) {
         await clerk.setActive({ session: result.createdSessionId });
         goHome();
       } else {
-        setError("Verification incomplete. Check the code and try again.");
+        // Surface the real status so a failure here is diagnosable instead of
+        // dead-ending on a generic message.
+        setError(
+          `Sign-up couldn't be completed (${result.status}). Please try again.`,
+        );
       }
     } catch (err: any) {
       const msg =

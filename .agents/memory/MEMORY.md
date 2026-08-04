@@ -5,6 +5,7 @@
 - [Server AI integration](ai-integration-setup.md) — api-server AI routes use the Replit OpenAI integration (AI_INTEGRATIONS_OPENAI_* + model gpt-5.4), not a user OPENAI_API_KEY; provision via setupReplitAIIntegrations.
 - [Twilio private number](twilio-private-number.md) — per-user proxy number (text + masked recorded calls); webhooks secret-gated (proxy hides sig), number↔user unique in DB to prevent cross-user leak, useMemo the API hook.
 - [Clerk v5 hook API change](clerk-v5-hooks.md) — @clerk/expo 3.x removed isLoaded from useSignIn/useSignUp; use useAuth().isLoaded instead.
+- [Clerk needs a 2nd-factor code step](clerk-second-factor-signin.md) — password alone never completes sign-in (needs_client_trust); custom UIs must build the emailed-code stage or dead-end.
 - [GitHub LoopIn push](github-loopin-push.md) — push via SSH deploy key in `.local/ssh` (restore script after restart); Replit git callbacks broken for this repo; never put keys in `.replit` userenv; pin pnpm in CI.
 - [Android release signing](android-release-signing.md) — keystore in `.local/android-signing/`; GITHUB_TOKEN shadowed by Replit system token (use GH_PAT); release bundling needs babel-preset-expo declared; verify with apksigner not jarsigner.
 - [Expo CI runtime config](expo-ci-runtime-config.md) — CI release builds install fine then crash instantly when an EXPO_PUBLIC_* is missing at bundle time; serve env-varying config from the API instead.

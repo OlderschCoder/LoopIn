@@ -13,7 +13,7 @@ import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { ActivityIndicator, Platform, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
 import { ClerkProvider, ClerkLoaded, useClerk } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 
@@ -40,9 +40,18 @@ const API_BASE_URL = _rawApiUrl.replace(/\/$/, "");
 function useClerkPublishableKey(): {
   publishableKey: string | undefined;
   keyError: string | null;
+  retryKeyFetch: () => void;
 } {
   const [fetchedKey, setFetchedKey] = React.useState<string | undefined>();
   const [keyError, setKeyError] = React.useState<string | null>(null);
+  // Bumping this re-runs the fetch, so a user who was offline can recover
+  // without force-quitting and reopening the app.
+  const [retryCount, setRetryCount] = React.useState(0);
+
+  const retryKeyFetch = React.useCallback(() => {
+    setKeyError(null);
+    setRetryCount((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     if (envPublishableKey) return;
@@ -75,7 +84,7 @@ function useClerkPublishableKey(): {
           if (cancelled) return;
           if (attempt === 2) {
             setKeyError(
-              "Could not reach the server. Check your internet connection and reopen the app.",
+              "Could not reach the server. Check your internet connection, then tap Try again.",
             );
             return;
           }
@@ -88,9 +97,9 @@ function useClerkPublishableKey(): {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [retryCount]);
 
-  return { publishableKey: envPublishableKey ?? fetchedKey, keyError };
+  return { publishableKey: envPublishableKey ?? fetchedKey, keyError, retryKeyFetch };
 }
 
 if (Platform.OS !== "web") {
@@ -270,15 +279,21 @@ function AuthGate() {
   }, [signedIn, clerk]);
 
   const inAuthGroup = segments[0] === "(auth)";
+  // There is no `app/index.tsx`, so the root route renders nothing. A signed-in
+  // user landing there (cold start with a cached session) must be pushed into
+  // the tabs or they just stare at an empty screen.
+  // Cast: expo-router's typed routes claim there is always >=1 segment, but the
+  // bare root URL really does yield an empty array at runtime.
+  const atRoot = (segments as string[]).length === 0;
 
   useEffect(() => {
     if (!loaded) return;
     if (!signedIn && !inAuthGroup) {
       router.replace("/(auth)/sign-in");
-    } else if (signedIn && inAuthGroup) {
+    } else if (signedIn && (inAuthGroup || atRoot)) {
       router.replace("/(tabs)");
     }
-  }, [loaded, signedIn, inAuthGroup, router]);
+  }, [loaded, signedIn, inAuthGroup, atRoot, router]);
 
   return <RootLayoutNav />;
 }
@@ -292,7 +307,7 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
-  const { publishableKey, keyError } = useClerkPublishableKey();
+  const { publishableKey, keyError, retryKeyFetch } = useClerkPublishableKey();
 
   useEffect(() => {
     if ((fontsLoaded || fontError) && (publishableKey || keyError)) {
@@ -306,7 +321,23 @@ export default function RootLayout() {
     return (
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#240E51" }}>
         {keyError ? (
-          <Text style={{ color: "#fff", textAlign: "center", paddingHorizontal: 32 }}>{keyError}</Text>
+          <>
+            <Text style={{ color: "#fff", textAlign: "center", paddingHorizontal: 32 }}>{keyError}</Text>
+            <Pressable
+              onPress={retryKeyFetch}
+              style={{
+                marginTop: 20,
+                paddingHorizontal: 28,
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: "#fff",
+              }}
+            >
+              <Text style={{ color: "#240E51", fontWeight: "600", fontSize: 16 }}>
+                Try again
+              </Text>
+            </Pressable>
+          </>
         ) : (
           <ActivityIndicator color="#fff" size="large" />
         )}
