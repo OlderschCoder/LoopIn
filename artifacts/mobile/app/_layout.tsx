@@ -13,7 +13,7 @@ import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { ActivityIndicator, Platform, View } from "react-native";
+import { ActivityIndicator, Platform, Text, View } from "react-native";
 import { ClerkProvider, ClerkLoaded, useClerk } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 
@@ -22,8 +22,57 @@ import { AppProvider, useApp } from "@/context/AppContext";
 
 SplashScreen.preventAutoHideAsync();
 
-const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
+const envPublishableKey =
+  process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || undefined;
 const proxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
+
+// Base URL of the API server (same convention as hooks/usePhone.ts).
+const _rawApiUrl =
+  process.env.EXPO_PUBLIC_API_URL ||
+  (process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "");
+const API_BASE_URL = _rawApiUrl.replace(/\/$/, "");
+
+/**
+ * Resolve the Clerk publishable key. Release builds made in CI don't bake the
+ * key in; instead they fetch it from the API server at startup so the correct
+ * key (pk_test in dev, pk_live in production) is always used.
+ */
+function useClerkPublishableKey(): {
+  publishableKey: string | undefined;
+  keyError: string | null;
+} {
+  const [fetchedKey, setFetchedKey] = React.useState<string | undefined>();
+  const [keyError, setKeyError] = React.useState<string | null>(null);
+
+  useEffect(() => {
+    if (envPublishableKey || !API_BASE_URL) return;
+    let cancelled = false;
+    (async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/auth/config`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = (await res.json()) as { clerkPublishableKey?: string };
+          if (!data.clerkPublishableKey) throw new Error("No key in response");
+          if (!cancelled) setFetchedKey(data.clerkPublishableKey);
+          return;
+        } catch (err) {
+          if (attempt === 2 && !cancelled) {
+            setKeyError(
+              "Could not reach the server. Check your internet connection and reopen the app.",
+            );
+          }
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return { publishableKey: envPublishableKey ?? fetchedKey, keyError };
+}
 
 if (Platform.OS !== "web") {
   Notifications.setNotificationHandler({
@@ -217,11 +266,27 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
+  const { publishableKey, keyError } = useClerkPublishableKey();
+
   useEffect(() => {
-    if (fontsLoaded || fontError) SplashScreen.hideAsync();
-  }, [fontsLoaded, fontError]);
+    if ((fontsLoaded || fontError) && (publishableKey || keyError)) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, fontError, publishableKey, keyError]);
 
   if (!fontsLoaded && !fontError) return null;
+
+  if (!publishableKey) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#240E51" }}>
+        {keyError ? (
+          <Text style={{ color: "#fff", textAlign: "center", paddingHorizontal: 32 }}>{keyError}</Text>
+        ) : (
+          <ActivityIndicator color="#fff" size="large" />
+        )}
+      </View>
+    );
+  }
 
   return (
     <ClerkProvider
