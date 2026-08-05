@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  View,
 } from "react-native";
 import { useAuth, useClerk } from "@clerk/expo";
 import { useRouter } from "expo-router";
@@ -202,6 +203,12 @@ export default function SignUpScreen() {
         />
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        {/* Clerk's bot-sign-up protection is enabled by default and mounts its
+            challenge into this node. Without it, signUp.create() is rejected in
+            production with "captcha_missing_token" — dev instances let it slide,
+            which is why this only ever failed on the published app. */}
+        <View nativeID="clerk-captcha" />
 
         <Pressable
           style={[styles.button, (!isLoaded || !email || !password || busy) && styles.disabled]}

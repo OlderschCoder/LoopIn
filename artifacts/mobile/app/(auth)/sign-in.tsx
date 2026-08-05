@@ -9,17 +9,36 @@ import {
   Text,
   TextInput,
 } from "react-native";
-import { useAuth, useClerk } from "@clerk/expo";
+import { useAuth, useClerk, useSSO } from "@clerk/expo";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import * as Linking from "expo-linking";
+import * as AuthSession from "expo-auth-session";
 
 WebBrowser.maybeCompleteAuthSession();
+
+/**
+ * Warms up the in-app browser on Android so the OAuth handoff is quicker and
+ * — more importantly — so Custom Tabs is already bound when we open it.
+ */
+function useWarmUpBrowser() {
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    void WebBrowser.warmUpAsync();
+    return () => {
+      void WebBrowser.coolDownAsync();
+    };
+  }, []);
+}
 
 export default function SignInScreen() {
   const router = useRouter();
   const { isLoaded } = useAuth();
   const clerk = useClerk();
+  // Clerk's own SSO flow. It owns the browser handoff and the return trip,
+  // including the proxy rewrite in production — which hand-rolled
+  // openAuthSessionAsync/Linking code cannot do correctly.
+  const { startSSOFlow } = useSSO();
+  useWarmUpBrowser();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -74,131 +93,45 @@ export default function SignInScreen() {
     return false;
   };
 
-  /**
-   * Finish a Google sign-in from the `loopin:///sso-callback?...` URL.
-   * Split out of handleGoogle so it can also run when Android killed the app
-   * while the OAuth browser was open and relaunched it via the callback intent
-   * — in that case there is no in-flight handleGoogle call to receive the URL.
-   */
-  const completeOAuthCallback = async (callbackUrl: string) => {
-    const nonceMatch = callbackUrl.match(/[?&]rotating_token_nonce=([^&]+)/);
-    const nonce = nonceMatch ? decodeURIComponent(nonceMatch[1]) : "";
-
-    await clerk.client!.signIn.reload({ rotatingTokenNonce: nonce });
-    const si = clerk.client!.signIn;
-
-    if (si.firstFactorVerification.status === "transferable") {
-      // First-time Google user — transfer into a new Clerk account
-      await clerk.client!.signUp.create({ transfer: true });
-      await clerk.setActive({ session: clerk.client!.signUp.createdSessionId });
-      goHome();
-      return;
-    }
-
-    // Google sign-in can also land on the second-factor step.
-    const handled = await continueSignIn(si);
-    if (!handled) {
-      setError(`Sign-in couldn't be completed (${si.status}). Please try again.`);
-    }
-  };
-
-  // Cold-start recovery: if Android relaunched the app straight into the OAuth
-  // callback, no handleGoogle promise is waiting for it, so pick it up here.
-  useEffect(() => {
-    if (!isLoaded) return;
-    let cancelled = false;
-
-    const resume = async (url: string | null) => {
-      if (cancelled || !url || !url.includes("sso-callback")) return;
-      setBusy(true);
-      setError(null);
-      try {
-        await completeOAuthCallback(url);
-      } catch (err: any) {
-        if (!cancelled) {
-          setError(
-            err?.errors?.[0]?.longMessage ??
-              err?.errors?.[0]?.message ??
-              "Google sign-in didn't finish. Please try again.",
-          );
-        }
-      } finally {
-        if (!cancelled) setBusy(false);
-      }
-    };
-
-    Linking.getInitialURL().then(resume).catch(() => {});
-    const sub = Linking.addEventListener("url", ({ url }) => resume(url));
-    return () => {
-      cancelled = true;
-      sub.remove();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded]);
-
   const handleGoogle = async () => {
     setBusy(true);
     setError(null);
     try {
-      // Use the app's native scheme — must match what's registered in Clerk's allowed redirect URLs
-      const redirectUrl = Linking.createURL("sso-callback");
-
-      await clerk.client!.signIn.create({
+      // startSSOFlow owns the whole browser round trip: it opens the auth
+      // session, waits for the callback on the app's own scheme, and reloads
+      // the Clerk client afterwards. Critically it also understands the
+      // production proxy. The previous hand-rolled version opened the browser
+      // itself and gave up after a 2.5s timer, then returned *silently* —
+      // which is why sign-in appeared to do nothing at all.
+      const { createdSessionId, signIn, signUp } = await startSSOFlow({
         strategy: "oauth_google",
-        redirectUrl,
+        redirectUrl: AuthSession.makeRedirectUri(),
       });
 
-      const { externalVerificationRedirectURL } =
-        clerk.client!.signIn.firstFactorVerification;
-      if (!externalVerificationRedirectURL) {
-        throw new Error("No Google redirect URL received from Clerk.");
-      }
-
-      // --- ANDROID FIX ---
-      // On Android, Chrome Custom Tabs handles the OAuth redirect by firing a system
-      // intent (which reopens the app) rather than returning the URL through
-      // openAuthSessionAsync. We set up a Linking listener BEFORE opening the browser
-      // so it fires even while we're awaiting the browser result.
-      let linkingResolve!: (url: string | null) => void;
-      const linkingPromise = new Promise<string | null>(
-        (res) => { linkingResolve = res; },
-      );
-      const linkingSub = Linking.addEventListener("url", ({ url }) => {
-        // Match the app's current scheme (loopin://) — derived from redirectUrl
-        // so a future scheme rename can't silently break this listener again.
-        const schemePrefix = redirectUrl.split("sso-callback")[0];
-        if (url.startsWith(schemePrefix)) linkingResolve(url);
-      });
-
-      // Open the browser for Google OAuth
-      const browserResult = await WebBrowser.openAuthSessionAsync(
-        externalVerificationRedirectURL.toString(),
-        redirectUrl,
-      );
-
-      let callbackUrl: string | null = null;
-
-      if (browserResult.type === "success" && (browserResult as any).url) {
-        // iOS or Android where openAuthSessionAsync intercepted the redirect
-        callbackUrl = (browserResult as any).url;
-        linkingResolve(null); // unblock linkingPromise so we don't leave it hanging
-      } else {
-        // Android fallback: linkingPromise may already be resolved (fired during await above)
-        // or we wait up to 2.5 s for it, then assume the user cancelled
-        callbackUrl = await Promise.race([
-          linkingPromise,
-          new Promise<null>((res) => setTimeout(() => res(null), 2500)),
-        ]);
-      }
-      linkingSub.remove();
-
-      if (!callbackUrl) {
-        // User closed the browser / cancelled
-        setBusy(false);
+      if (createdSessionId) {
+        await clerk.setActive({ session: createdSessionId });
+        goHome();
         return;
       }
 
-      await completeOAuthCallback(callbackUrl);
+      // First-time Google user: Clerk creates a sign-up rather than a sign-in.
+      if (signUp?.createdSessionId) {
+        await clerk.setActive({ session: signUp.createdSessionId });
+        goHome();
+        return;
+      }
+
+      // Otherwise the attempt needs a further step — usually the emailed code.
+      if (signIn && (await continueSignIn(signIn))) return;
+
+      // Never fail silently. If we land here the flow stopped for a reason we
+      // don't explicitly handle, and the user is owed an explanation.
+      const stoppedAt = signIn?.status ?? signUp?.status;
+      setError(
+        stoppedAt
+          ? `Google sign-in stopped at "${stoppedAt}". Please sign in with email instead.`
+          : "Google sign-in was cancelled or didn't come back. Please try again, or sign in with email.",
+      );
     } catch (err: any) {
       const msg =
         err?.errors?.[0]?.longMessage ??
