@@ -103,6 +103,32 @@ jobs:
             -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
             -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
 
+      # ── Post-build gate: sign-in must be reachable ──────────────────────────
+      # A release build whose bundle points at the production API but has no
+      # Clerk proxy path ships a blank screen: the live Clerk instance's own
+      # frontend-api host does not answer, so all auth traffic must go through
+      # the server's /api/__clerk proxy. Four such builds reached a real phone
+      # before this check existed — fail the job instead.
+      - name: Verify release bundle can reach sign-in
+        if: github.event.inputs.build_type == 'release'
+        working-directory: artifacts/mobile/android
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/release/app-release.apk
+          unzip -o -j "$APK" assets/index.android.bundle -d /tmp/bundle-check
+          BUNDLE=/tmp/bundle-check/index.android.bundle
+          if grep -q -e 'pk_live_' -e "$EXPO_PUBLIC_API_URL" "$BUNDLE"; then
+            if ! grep -q '/api/__clerk' "$BUNDLE"; then
+              echo "::error::Release bundle targets a live Clerk key / production API" \
+                   "but contains no '/api/__clerk' proxy path. This build would hang" \
+                   "on a blank screen at sign-in. Refusing to ship it."
+              exit 1
+            fi
+            echo "OK: bundle targets production and includes the /api/__clerk proxy path."
+          else
+            echo "OK: bundle does not reference a live key or the production API URL."
+          fi
+
       # ── Upload APK ──────────────────────────────────────────────────────────
       - name: Upload debug APK
         if: github.event.inputs.build_type != 'release'

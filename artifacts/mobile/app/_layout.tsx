@@ -29,6 +29,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppProvider, useApp } from "@/context/AppContext";
 
 SplashScreen.preventAutoHideAsync();
+import { resolveClerkProxyUrl } from "@/utils/clerkProxy";
 
 const envPublishableKey =
   process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || undefined;
@@ -100,8 +101,6 @@ function useFatalError(): FatalInfo | null {
 
 // Path that the API server mounts its Clerk proxy on (CLERK_PROXY_PATH in
 // artifacts/api-server/src/middlewares/clerkProxyMiddleware.ts).
-const CLERK_PROXY_PATH = "/api/__clerk";
-
 /**
  * Resolve the Clerk publishable key *and* the Clerk proxy URL. Release builds
  * made in CI don't bake either in; instead they fetch them from the API server
@@ -186,20 +185,17 @@ function useClerkPublishableKey(): {
 
   const publishableKey = envPublishableKey ?? fetchedKey;
 
-  // Precedence: an explicitly baked-in proxy (EAS builds) > whatever the server
-  // reports > a derived fallback. The fallback matters because a server that
-  // predates the `clerkProxyUrl` field would otherwise leave a live-key build
-  // with no proxy at all — i.e. the blank-screen hang. Live keys are exactly
-  // the case that requires the proxy, so deriving it is safe; test keys must
-  // keep talking to Clerk directly.
-  const derivedProxyUrl =
-    publishableKey?.startsWith("pk_live_") && API_BASE_URL
-      ? `${API_BASE_URL}${CLERK_PROXY_PATH}`
-      : undefined;
-
   return {
     publishableKey,
-    proxyUrl: proxyUrl ?? fetchedProxyUrl ?? derivedProxyUrl,
+    // Precedence lives in resolveClerkProxyUrl (unit-tested): baked-in env
+    // proxy > server-reported proxy > derived /api/__clerk fallback for
+    // pk_live_ keys only.
+    proxyUrl: resolveClerkProxyUrl({
+      envProxyUrl: proxyUrl,
+      serverProxyUrl: fetchedProxyUrl,
+      publishableKey,
+      apiBaseUrl: API_BASE_URL,
+    }),
     keyError,
     retryKeyFetch,
   };
