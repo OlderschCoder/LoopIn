@@ -13,8 +13,16 @@ import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
-import { ClerkProvider, useClerk } from "@clerk/expo";
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import { reloadAppAsync } from "expo";
+import { ClerkProvider, ClerkLoaded, useClerk } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -31,6 +39,48 @@ const _rawApiUrl =
   process.env.EXPO_PUBLIC_API_URL ||
   (process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "");
 const API_BASE_URL = _rawApiUrl.replace(/\/$/, "");
+
+// ── Startup crash capture ────────────────────────────────────────────────────
+// An uncaught JS error during startup tears the app down with no message: the
+// user sees the logo, then the app quits. That is indistinguishable from a
+// native crash and impossible to diagnose remotely. Capture the error, keep the
+// process alive, and put the reason on screen where it can be read.
+type FatalInfo = { message: string; stack: string };
+
+let capturedFatal: FatalInfo | null = null;
+const fatalSubscribers = new Set<(fatal: FatalInfo) => void>();
+
+function reportFatal(error: unknown): void {
+  if (capturedFatal) return; // keep the first, most relevant failure
+  const err = error as { name?: string; message?: string; stack?: string };
+  capturedFatal = {
+    message: `${err?.name ?? "Error"}: ${err?.message ?? String(error)}`,
+    stack: (err?.stack ?? "").split("\n").slice(0, 12).join("\n"),
+  };
+  fatalSubscribers.forEach((notify) => notify(capturedFatal!));
+}
+
+{
+  const errorUtils = (globalThis as { ErrorUtils?: any }).ErrorUtils;
+  if (errorUtils?.setGlobalHandler) {
+    // Deliberately not delegating to the default handler: it tears the app
+    // down, which is exactly the behaviour being replaced with a message.
+    errorUtils.setGlobalHandler((error: unknown) => reportFatal(error));
+  }
+}
+
+function useFatalError(): FatalInfo | null {
+  const [fatal, setFatal] = React.useState<FatalInfo | null>(capturedFatal);
+  useEffect(() => {
+    if (capturedFatal) setFatal(capturedFatal);
+    const notify = (f: FatalInfo) => setFatal(f);
+    fatalSubscribers.add(notify);
+    return () => {
+      fatalSubscribers.delete(notify);
+    };
+  }, []);
+  return fatal;
+}
 
 // Path that the API server mounts its Clerk proxy on (CLERK_PROXY_PATH in
 // artifacts/api-server/src/middlewares/clerkProxyMiddleware.ts).
@@ -339,9 +389,11 @@ function AuthGate() {
 function StatusScreen({
   message,
   onRetry,
+  absolute,
 }: {
   message?: string | null;
   onRetry?: () => void;
+  absolute?: boolean;
 }) {
   return (
     <View
@@ -350,6 +402,15 @@ function StatusScreen({
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: "#240E51",
+        ...(absolute
+          ? ({
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+            } as const)
+          : null),
       }}
     >
       {message ? (
@@ -386,11 +447,22 @@ function StatusScreen({
 }
 
 // ── Clerk boot gate ──────────────────────────────────────────────────────────
-// Stands in for <ClerkLoaded>, which renders null for as long as Clerk has not
-// finished initialising. When the auth backend is unreachable that "temporary"
-// null becomes permanent — and because the splash screen has already been
-// dismissed by then, the user is left staring at a blank window with no error
-// message and no way to retry. Always give the failure a face.
+// <ClerkLoaded> renders null for as long as Clerk has not finished
+// initialising. When the auth backend is unreachable that "temporary" null
+// becomes permanent — and because the splash screen has already been dismissed
+// by then, the user is left staring at a blank window with no error message and
+// no way to retry.
+//
+// <ClerkLoaded> stays the readiness check: reading the Clerk singleton before
+// it has loaded is not something the native SDK guarantees, so the gate only
+// layers a status screen over the top until the real gate opens.
+function ClerkReadySignal({ onReady }: { onReady: () => void }) {
+  useEffect(() => {
+    onReady();
+  }, [onReady]);
+  return null;
+}
+
 function ClerkBootGate({
   onRetry,
   children,
@@ -398,36 +470,121 @@ function ClerkBootGate({
   onRetry: () => void;
   children: React.ReactNode;
 }) {
-  const clerk = useClerk();
-  const [, forceRender] = React.useReducer((n: number) => n + 1, 0);
+  const [clerkReady, setClerkReady] = React.useState(false);
   const [timedOut, setTimedOut] = React.useState(false);
-
-  useEffect(() => clerk.addListener(() => forceRender()), [clerk]);
-
-  const loaded = !!clerk.loaded;
+  const markReady = React.useCallback(() => setClerkReady(true), []);
 
   useEffect(() => {
-    if (loaded) return;
+    if (clerkReady) return;
     const id = setTimeout(() => setTimedOut(true), 20000);
     return () => clearTimeout(id);
-  }, [loaded]);
+  }, [clerkReady]);
 
-  if (loaded) return <>{children}</>;
-  if (timedOut) {
-    return (
-      <StatusScreen
-        message={
-          "Couldn't reach the sign-in service.\n\nCheck your internet connection, then tap Try again."
-        }
-        onRetry={onRetry}
-      />
-    );
-  }
-  return <StatusScreen />;
+  return (
+    <>
+      <ClerkLoaded>
+        <ClerkReadySignal onReady={markReady} />
+        {children}
+      </ClerkLoaded>
+      {clerkReady ? null : (
+        <StatusScreen
+          absolute
+          message={
+            timedOut
+              ? "Couldn't reach the sign-in service.\n\nCheck your internet connection, then tap Try again."
+              : null
+          }
+          onRetry={timedOut ? onRetry : undefined}
+        />
+      )}
+    </>
+  );
+}
+
+// ── Startup crash screen ─────────────────────────────────────────────────────
+function FatalErrorScreen({ fatal }: { fatal: FatalInfo }) {
+  // Most stacks repeat the message on their first line; don't print it twice.
+  const stack = fatal.stack.startsWith(fatal.message)
+    ? fatal.stack.slice(fatal.message.length).replace(/^\n+/, "")
+    : fatal.stack;
+
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: "#240E51",
+        paddingHorizontal: 20,
+        paddingTop: 72,
+        paddingBottom: 28,
+      }}
+    >
+      <Text
+        style={{
+          color: "#fff",
+          fontSize: 20,
+          fontWeight: "700",
+          marginBottom: 8,
+        }}
+      >
+        LoopIn hit an error starting up
+      </Text>
+      <Text style={{ color: "#C9BCE4", fontSize: 14, marginBottom: 16 }}>
+        Please screenshot this and send it over — it says exactly what went
+        wrong.
+      </Text>
+      <ScrollView style={{ flex: 1 }}>
+        <Text
+          selectable
+          style={{
+            color: "#fff",
+            fontSize: 12,
+            lineHeight: 18,
+            fontFamily: Platform.select({
+              ios: "Menlo",
+              android: "monospace",
+              default: "monospace",
+            }),
+          }}
+        >
+          {fatal.message}
+          {stack ? `\n\n${stack}` : ""}
+        </Text>
+      </ScrollView>
+      <Pressable
+        onPress={() => {
+          reloadAppAsync().catch(() => {});
+        }}
+        style={{
+          marginTop: 12,
+          paddingVertical: 14,
+          borderRadius: 12,
+          backgroundColor: "#fff",
+          alignItems: "center",
+        }}
+      >
+        <Text style={{ color: "#240E51", fontWeight: "600", fontSize: 16 }}>
+          Reload
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function StartupErrorFallback({ error }: { error: Error }) {
+  return (
+    <FatalErrorScreen
+      fatal={{
+        message: `${error.name}: ${error.message}`,
+        stack: (error.stack ?? "").split("\n").slice(0, 12).join("\n"),
+      }}
+    />
+  );
 }
 
 // ── Root ─────────────────────────────────────────────────────────────────────
 export default function RootLayout() {
+  const fatal = useFatalError();
+
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -456,6 +613,14 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError, publishableKey, keyError]);
 
+  // A startup crash must never be left sitting behind the splash screen — that
+  // is the "shows the logo, then quits" symptom, with the reason invisible.
+  useEffect(() => {
+    if (fatal) SplashScreen.hideAsync().catch(() => {});
+  }, [fatal]);
+
+  if (fatal) return <FatalErrorScreen fatal={fatal} />;
+
   if (!fontsLoaded && !fontError) return null;
 
   if (!publishableKey) {
@@ -467,28 +632,33 @@ export default function RootLayout() {
     );
   }
 
+  // The outer boundary sits above ClerkProvider so a render error in auth setup
+  // shows a readable reason instead of taking the whole app down. The inner one
+  // keeps its friendlier fallback for errors inside the signed-in app.
   return (
-    <ClerkProvider
-      key={bootAttempt}
-      publishableKey={publishableKey}
-      tokenCache={tokenCache}
-      proxyUrl={clerkProxyUrl}
-    >
-      <ClerkBootGate onRetry={retryBoot}>
-        <SafeAreaProvider>
-          <ErrorBoundary>
-            <QueryClientProvider client={queryClient}>
-              <AppProvider>
-                <GestureHandlerRootView>
-                  <KeyboardProvider>
-                    <AuthGate />
-                  </KeyboardProvider>
-                </GestureHandlerRootView>
-              </AppProvider>
-            </QueryClientProvider>
-          </ErrorBoundary>
-        </SafeAreaProvider>
-      </ClerkBootGate>
-    </ClerkProvider>
+    <ErrorBoundary FallbackComponent={StartupErrorFallback}>
+      <ClerkProvider
+        key={bootAttempt}
+        publishableKey={publishableKey}
+        tokenCache={tokenCache}
+        proxyUrl={clerkProxyUrl}
+      >
+        <ClerkBootGate onRetry={retryBoot}>
+          <SafeAreaProvider>
+            <ErrorBoundary>
+              <QueryClientProvider client={queryClient}>
+                <AppProvider>
+                  <GestureHandlerRootView>
+                    <KeyboardProvider>
+                      <AuthGate />
+                    </KeyboardProvider>
+                  </GestureHandlerRootView>
+                </AppProvider>
+              </QueryClientProvider>
+            </ErrorBoundary>
+          </SafeAreaProvider>
+        </ClerkBootGate>
+      </ClerkProvider>
+    </ErrorBoundary>
   );
 }
