@@ -30,6 +30,7 @@ import { AppProvider, useApp } from "@/context/AppContext";
 
 SplashScreen.preventAutoHideAsync();
 import { resolveClerkProxyUrl } from "@/utils/clerkProxy";
+import * as Network from "expo-network";
 
 const envPublishableKey =
   process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY || undefined;
@@ -458,6 +459,8 @@ function StatusScreen({
   );
 }
 
+const AUTO_RETRY_DELAYS_MS = [3000, 8000, 20000];
+
 // ── Clerk boot gate ──────────────────────────────────────────────────────────
 // <ClerkLoaded> renders null for as long as Clerk has not finished
 // initialising. When the auth backend is unreachable that "temporary" null
@@ -475,10 +478,27 @@ function ClerkReadySignal({ onReady }: { onReady: () => void }) {
   return null;
 }
 
+// Recovery is automatic first, manual last: a stalled init is retried with
+// backoff (3s → 8s → 20s), and immediately when the device regains
+// connectivity. Only after all automatic attempts are exhausted does the
+// terminal "Try again" screen appear.
+//
+// Retrying works by remounting ClerkProvider (via key={bootAttempt} in
+// RootLayout). That is only safe because nothing below this gate is usable
+// yet: every retry effect here is gated on `!clerkReady`, and the moment Clerk
+// loads all timers/listeners are cleaned up — so an automatic retry can never
+// fire while the user is signed in and using the app.
+const FINAL_ATTEMPT_TIMEOUT_MS = 20000;
+
 function ClerkBootGate({
+  attempt,
+  onAutoRetry,
   onRetry,
   children,
 }: {
+  /** Which boot attempt this is (0-based); drives the backoff schedule. */
+  attempt: number;
+  onAutoRetry: () => void;
   onRetry: () => void;
   children: React.ReactNode;
 }) {
@@ -490,11 +510,45 @@ function ClerkBootGate({
     setClerkReady(true);
   }, []);
 
+  const autoRetriesLeft = attempt < AUTO_RETRY_DELAYS_MS.length;
+
+  // Scheduled retry: wait out this attempt's backoff window, then either
+  // remount for another automatic attempt or surface the manual screen.
   useEffect(() => {
     if (clerkReady) return;
-    const id = setTimeout(() => setTimedOut(true), 20000);
+    const delay = autoRetriesLeft
+      ? AUTO_RETRY_DELAYS_MS[attempt]
+      : FINAL_ATTEMPT_TIMEOUT_MS;
+    const id = setTimeout(() => {
+      if (autoRetriesLeft) {
+        onAutoRetry();
+      } else {
+        setTimedOut(true);
+      }
+    }, delay);
     return () => clearTimeout(id);
-  }, [clerkReady]);
+  }, [clerkReady, attempt, autoRetriesLeft, onAutoRetry]);
+
+  // Connectivity-restored retry: don't make a user who just walked out of a
+  // dead zone wait out the timer. Fires at most once per mount, only on an
+  // offline → online transition, and never once Clerk has loaded (the effect
+  // is torn down).
+  useEffect(() => {
+    if (clerkReady || timedOut) return;
+    let wasOffline = false;
+    let fired = false;
+    const subscription = Network.addNetworkStateListener((state) => {
+      const online =
+        state.isConnected === true && state.isInternetReachable !== false;
+      if (!online) {
+        wasOffline = true;
+      } else if (wasOffline && !fired) {
+        fired = true;
+        onAutoRetry();
+      }
+    });
+    return () => subscription.remove();
+  }, [clerkReady, timedOut, onAutoRetry]);
 
   return (
     <>
@@ -618,8 +672,19 @@ export default function RootLayout() {
   // Remounting ClerkProvider is what actually retries a failed Clerk init —
   // refetching the config alone would leave the dead instance in place.
   const [bootAttempt, setBootAttempt] = React.useState(0);
+  // Position in the automatic backoff schedule. Distinct from bootAttempt: a
+  // manual "Try again" resets this to 0 so the user gets a fresh round of
+  // automatic retries, while bootAttempt only ever increments (it is the
+  // remount key, so it must never repeat).
+  const [autoAttempt, setAutoAttempt] = React.useState(0);
   const retryBoot = React.useCallback(() => {
     retryKeyFetch();
+    setAutoAttempt(0);
+    setBootAttempt((n) => n + 1);
+  }, [retryKeyFetch]);
+  const autoRetryBoot = React.useCallback(() => {
+    retryKeyFetch();
+    setAutoAttempt((n) => n + 1);
     setBootAttempt((n) => n + 1);
   }, [retryKeyFetch]);
 
@@ -659,7 +724,11 @@ export default function RootLayout() {
         tokenCache={tokenCache}
         proxyUrl={clerkProxyUrl}
       >
-        <ClerkBootGate onRetry={retryBoot}>
+        <ClerkBootGate
+          attempt={autoAttempt}
+          onAutoRetry={autoRetryBoot}
+          onRetry={retryBoot}
+        >
           <SafeAreaProvider>
             <ErrorBoundary>
               <QueryClientProvider client={queryClient}>
