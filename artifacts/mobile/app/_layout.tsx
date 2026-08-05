@@ -60,12 +60,28 @@ function reportFatal(error: unknown): void {
   fatalSubscribers.forEach((notify) => notify(capturedFatal!));
 }
 
+// Only fatal errors, and only while starting up, are intercepted. Swallowing
+// everything for the whole session would suppress ordinary error reporting and
+// could leave a half-broken app running instead of failing honestly.
+let startupDiagnosticsActive = true;
+
+function endStartupDiagnostics(): void {
+  startupDiagnosticsActive = false;
+}
+
 {
   const errorUtils = (globalThis as { ErrorUtils?: any }).ErrorUtils;
   if (errorUtils?.setGlobalHandler) {
-    // Deliberately not delegating to the default handler: it tears the app
-    // down, which is exactly the behaviour being replaced with a message.
-    errorUtils.setGlobalHandler((error: unknown) => reportFatal(error));
+    const defaultHandler = errorUtils.getGlobalHandler?.();
+    errorUtils.setGlobalHandler((error: unknown, isFatal?: boolean) => {
+      if (isFatal && startupDiagnosticsActive) {
+        // Deliberately not delegating: the default handler tears the app down,
+        // which is exactly the silent quit being replaced with a message.
+        reportFatal(error);
+        return;
+      }
+      defaultHandler?.(error, isFatal);
+    });
   }
 }
 
@@ -472,7 +488,11 @@ function ClerkBootGate({
 }) {
   const [clerkReady, setClerkReady] = React.useState(false);
   const [timedOut, setTimedOut] = React.useState(false);
-  const markReady = React.useCallback(() => setClerkReady(true), []);
+  const markReady = React.useCallback(() => {
+    // The app is up; hand error handling back to the platform.
+    endStartupDiagnostics();
+    setClerkReady(true);
+  }, []);
 
   useEffect(() => {
     if (clerkReady) return;
