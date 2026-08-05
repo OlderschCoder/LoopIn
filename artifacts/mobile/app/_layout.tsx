@@ -14,7 +14,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
-import { ClerkProvider, ClerkLoaded, useClerk } from "@clerk/expo";
+import { ClerkProvider, useClerk } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -32,17 +32,30 @@ const _rawApiUrl =
   (process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "");
 const API_BASE_URL = _rawApiUrl.replace(/\/$/, "");
 
+// Path that the API server mounts its Clerk proxy on (CLERK_PROXY_PATH in
+// artifacts/api-server/src/middlewares/clerkProxyMiddleware.ts).
+const CLERK_PROXY_PATH = "/api/__clerk";
+
 /**
- * Resolve the Clerk publishable key. Release builds made in CI don't bake the
- * key in; instead they fetch it from the API server at startup so the correct
- * key (pk_test in dev, pk_live in production) is always used.
+ * Resolve the Clerk publishable key *and* the Clerk proxy URL. Release builds
+ * made in CI don't bake either in; instead they fetch them from the API server
+ * at startup so the correct values (pk_test + direct in dev, pk_live + proxy in
+ * production) are always used.
+ *
+ * The proxy is not optional in production: a live instance's own frontend-api
+ * host is unreachable, so a client configured without `proxyUrl` never finishes
+ * loading and the app sits on a blank screen forever.
  */
 function useClerkPublishableKey(): {
   publishableKey: string | undefined;
+  proxyUrl: string | undefined;
   keyError: string | null;
   retryKeyFetch: () => void;
 } {
   const [fetchedKey, setFetchedKey] = React.useState<string | undefined>();
+  const [fetchedProxyUrl, setFetchedProxyUrl] = React.useState<
+    string | undefined
+  >();
   const [keyError, setKeyError] = React.useState<string | null>(null);
   // Bumping this re-runs the fetch, so a user who was offline can recover
   // without force-quitting and reopening the app.
@@ -76,9 +89,15 @@ function useClerkPublishableKey(): {
             signal: controller.signal,
           });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const data = (await res.json()) as { clerkPublishableKey?: string };
+          const data = (await res.json()) as {
+            clerkPublishableKey?: string;
+            clerkProxyUrl?: string;
+          };
           if (!data.clerkPublishableKey) throw new Error("No key in response");
-          if (!cancelled) setFetchedKey(data.clerkPublishableKey);
+          if (!cancelled) {
+            setFetchedKey(data.clerkPublishableKey);
+            setFetchedProxyUrl(data.clerkProxyUrl);
+          }
           return;
         } catch {
           if (cancelled) return;
@@ -99,7 +118,25 @@ function useClerkPublishableKey(): {
     };
   }, [retryCount]);
 
-  return { publishableKey: envPublishableKey ?? fetchedKey, keyError, retryKeyFetch };
+  const publishableKey = envPublishableKey ?? fetchedKey;
+
+  // Precedence: an explicitly baked-in proxy (EAS builds) > whatever the server
+  // reports > a derived fallback. The fallback matters because a server that
+  // predates the `clerkProxyUrl` field would otherwise leave a live-key build
+  // with no proxy at all — i.e. the blank-screen hang. Live keys are exactly
+  // the case that requires the proxy, so deriving it is safe; test keys must
+  // keep talking to Clerk directly.
+  const derivedProxyUrl =
+    publishableKey?.startsWith("pk_live_") && API_BASE_URL
+      ? `${API_BASE_URL}${CLERK_PROXY_PATH}`
+      : undefined;
+
+  return {
+    publishableKey,
+    proxyUrl: proxyUrl ?? fetchedProxyUrl ?? derivedProxyUrl,
+    keyError,
+    retryKeyFetch,
+  };
 }
 
 if (Platform.OS !== "web") {
@@ -298,6 +335,97 @@ function AuthGate() {
   return <RootLayoutNav />;
 }
 
+// ── Boot status screen ───────────────────────────────────────────────────────
+function StatusScreen({
+  message,
+  onRetry,
+}: {
+  message?: string | null;
+  onRetry?: () => void;
+}) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#240E51",
+      }}
+    >
+      {message ? (
+        <>
+          <Text
+            style={{ color: "#fff", textAlign: "center", paddingHorizontal: 32 }}
+          >
+            {message}
+          </Text>
+          {onRetry ? (
+            <Pressable
+              onPress={onRetry}
+              style={{
+                marginTop: 20,
+                paddingHorizontal: 28,
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: "#fff",
+              }}
+            >
+              <Text
+                style={{ color: "#240E51", fontWeight: "600", fontSize: 16 }}
+              >
+                Try again
+              </Text>
+            </Pressable>
+          ) : null}
+        </>
+      ) : (
+        <ActivityIndicator color="#fff" size="large" />
+      )}
+    </View>
+  );
+}
+
+// ── Clerk boot gate ──────────────────────────────────────────────────────────
+// Stands in for <ClerkLoaded>, which renders null for as long as Clerk has not
+// finished initialising. When the auth backend is unreachable that "temporary"
+// null becomes permanent — and because the splash screen has already been
+// dismissed by then, the user is left staring at a blank window with no error
+// message and no way to retry. Always give the failure a face.
+function ClerkBootGate({
+  onRetry,
+  children,
+}: {
+  onRetry: () => void;
+  children: React.ReactNode;
+}) {
+  const clerk = useClerk();
+  const [, forceRender] = React.useReducer((n: number) => n + 1, 0);
+  const [timedOut, setTimedOut] = React.useState(false);
+
+  useEffect(() => clerk.addListener(() => forceRender()), [clerk]);
+
+  const loaded = !!clerk.loaded;
+
+  useEffect(() => {
+    if (loaded) return;
+    const id = setTimeout(() => setTimedOut(true), 20000);
+    return () => clearTimeout(id);
+  }, [loaded]);
+
+  if (loaded) return <>{children}</>;
+  if (timedOut) {
+    return (
+      <StatusScreen
+        message={
+          "Couldn't reach the sign-in service.\n\nCheck your internet connection, then tap Try again."
+        }
+        onRetry={onRetry}
+      />
+    );
+  }
+  return <StatusScreen />;
+}
+
 // ── Root ─────────────────────────────────────────────────────────────────────
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -307,7 +435,20 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
-  const { publishableKey, keyError, retryKeyFetch } = useClerkPublishableKey();
+  const {
+    publishableKey,
+    proxyUrl: clerkProxyUrl,
+    keyError,
+    retryKeyFetch,
+  } = useClerkPublishableKey();
+
+  // Remounting ClerkProvider is what actually retries a failed Clerk init —
+  // refetching the config alone would leave the dead instance in place.
+  const [bootAttempt, setBootAttempt] = React.useState(0);
+  const retryBoot = React.useCallback(() => {
+    retryKeyFetch();
+    setBootAttempt((n) => n + 1);
+  }, [retryKeyFetch]);
 
   useEffect(() => {
     if ((fontsLoaded || fontError) && (publishableKey || keyError)) {
@@ -319,39 +460,21 @@ export default function RootLayout() {
 
   if (!publishableKey) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#240E51" }}>
-        {keyError ? (
-          <>
-            <Text style={{ color: "#fff", textAlign: "center", paddingHorizontal: 32 }}>{keyError}</Text>
-            <Pressable
-              onPress={retryKeyFetch}
-              style={{
-                marginTop: 20,
-                paddingHorizontal: 28,
-                paddingVertical: 12,
-                borderRadius: 12,
-                backgroundColor: "#fff",
-              }}
-            >
-              <Text style={{ color: "#240E51", fontWeight: "600", fontSize: 16 }}>
-                Try again
-              </Text>
-            </Pressable>
-          </>
-        ) : (
-          <ActivityIndicator color="#fff" size="large" />
-        )}
-      </View>
+      <StatusScreen
+        message={keyError}
+        onRetry={keyError ? retryBoot : undefined}
+      />
     );
   }
 
   return (
     <ClerkProvider
+      key={bootAttempt}
       publishableKey={publishableKey}
       tokenCache={tokenCache}
-      proxyUrl={proxyUrl}
+      proxyUrl={clerkProxyUrl}
     >
-      <ClerkLoaded>
+      <ClerkBootGate onRetry={retryBoot}>
         <SafeAreaProvider>
           <ErrorBoundary>
             <QueryClientProvider client={queryClient}>
@@ -365,7 +488,7 @@ export default function RootLayout() {
             </QueryClientProvider>
           </ErrorBoundary>
         </SafeAreaProvider>
-      </ClerkLoaded>
+      </ClerkBootGate>
     </ClerkProvider>
   );
 }
