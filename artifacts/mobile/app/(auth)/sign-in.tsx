@@ -13,6 +13,7 @@ import { useAuth, useClerk, useSSO } from "@clerk/expo";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
+import * as Linking from "expo-linking";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -143,6 +144,51 @@ export default function SignInScreen() {
       setBusy(false);
     }
   };
+
+  // Cold-start recovery. Android can kill the app while the OAuth browser is
+  // open; the callback then relaunches a *fresh* process, so there is no
+  // startSSOFlow promise left waiting to receive it and the user would be
+  // stranded on this screen. Only the initial launch URL is inspected — adding
+  // a live URL listener here would race with the one startSSOFlow installs.
+  useEffect(() => {
+    if (!isLoaded) return;
+    let cancelled = false;
+
+    void (async () => {
+      const url = await Linking.getInitialURL().catch(() => null);
+      if (cancelled || !url || !url.includes("sso-callback")) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const nonce = url.match(/[?&]rotating_token_nonce=([^&]+)/)?.[1];
+        await clerk.client!.signIn.reload({
+          rotatingTokenNonce: nonce ? decodeURIComponent(nonce) : "",
+        });
+        const attempt = clerk.client!.signIn;
+        // continueSignIn handles both "complete" and the emailed-code step.
+        if (!(await continueSignIn(attempt)) && !cancelled) {
+          setError(
+            `Google sign-in stopped at "${attempt.status}". Please sign in with email instead.`,
+          );
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(
+            err?.errors?.[0]?.longMessage ??
+              err?.errors?.[0]?.message ??
+              "Google sign-in didn't finish. Please try again.",
+          );
+        }
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded]);
 
   const handleEmailSignIn = async () => {
     if (!isLoaded) return;

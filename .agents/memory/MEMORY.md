@@ -10,6 +10,7 @@
 - [Android release signing](android-release-signing.md) — keystore in `.local/android-signing/`; GITHUB_TOKEN shadowed by Replit system token (use GH_PAT); release bundling needs babel-preset-expo declared; verify with apksigner not jarsigner.
 - [Expo CI runtime config](expo-ci-runtime-config.md) — CI release builds install fine then crash instantly when an EXPO_PUBLIC_* is missing at bundle time; serve env-varying config from the API instead.
 - [Diagnosing native-only crashes](mobile-crash-diagnosis.md) — no KVM/emulator here, web preview can't catch APK crashes; ship an ErrorUtils handler + boundary above the auth provider (ErrorFallback hides details in release).
+- [Clerk Expo prod-only auth failures](clerk-expo-prod-signin.md) — sign-up needs the `clerk-captcha` node (prod rejects without it); use `useSSO()`, never hand-rolled OAuth; prod FAPI host is unreachable.
 - [Prod Clerk needs the server proxy](clerk-prod-proxy.md) — live keys must use `/api/__clerk` or the app hangs blank at ClerkLoaded; browser tests of a live key false-negative on Origin.
 - [Clerk live-key EAS builds](clerk-eas-live-key.md) — mobile builds pointing at prod API need prod's pk_live publishable key in EAS env, not the dev pk_test; mismatched instance issuer silently 401s.
 - [Play Store screenshot capture](play-store-screenshot-capture.md) — headless Clerk sign-in on Expo web needs 2FA code 424242 (needs_client_trust); seed `u:<uid>:*` localStorage for populated screens.
