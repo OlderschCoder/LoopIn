@@ -145,7 +145,19 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
     EXPO_PUBLIC_REPL_ID: expoPublicReplId,
     EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.CLERK_PUBLISHABLE_KEY || "",
     EXPO_PUBLIC_CLERK_PROXY_URL: clerkProxyUrl,
+    // This build only needs Metro to serve bundles and manifests over
+    // localhost; nothing here requires an Expo account. But app.json carries an
+    // EAS project id and owner, so on startup the CLI calls Expo's API — and
+    // when the token it is handed has lapsed it exits with "ApiV2Error: The
+    // bearer token is invalid", Metro never binds, and the 60s wait below turns
+    // that into "Metro timeout". Offline mode skips the API call entirely and
+    // uses anonymous manifest signatures. Note: the equivalent --offline *flag*
+    // cannot be combined with --localhost, so it has to be set this way.
+    EXPO_OFFLINE: "1",
   };
+  // Nothing to authenticate with means nothing to expire. Keeps a stale token
+  // in the deploy environment from taking the publish down again.
+  delete env.EXPO_TOKEN;
 
   if (expoPublicReplId) {
     console.log(`Setting EXPO_PUBLIC_REPL_ID=${expoPublicReplId}`);
