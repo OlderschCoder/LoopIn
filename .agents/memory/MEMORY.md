@@ -8,6 +8,7 @@
 - [Clerk needs a 2nd-factor code step](clerk-second-factor-signin.md) — password alone never completes sign-in (needs_client_trust); custom UIs must build the emailed-code stage or dead-end.
 - [GitHub LoopIn push](github-loopin-push.md) — push via SSH deploy key in `.local/ssh` (restore script after restart); Replit git callbacks broken for this repo; never put keys in `.replit` userenv; pin pnpm in CI.
 - [Android release signing](android-release-signing.md) — keystore in `.local/android-signing/`; GITHUB_TOKEN shadowed by Replit system token (use GH_PAT); release bundling needs babel-preset-expo declared; verify with apksigner not jarsigner.
+- [Expo CLI auth breaks dev + publish](expo-offline-builds.md) — `expo start` authenticates before Metro binds; a lapsed platform EXPO_TOKEN reads as "Metro timeout". Fix: `EXPO_OFFLINE=1` (env, not the flag).
 - [Expo CI runtime config](expo-ci-runtime-config.md) — CI release builds install fine then crash instantly when an EXPO_PUBLIC_* is missing at bundle time; serve env-varying config from the API instead.
 - [Diagnosing native-only crashes](mobile-crash-diagnosis.md) — no KVM/emulator here, web preview can't catch APK crashes; ship an ErrorUtils handler + boundary above the auth provider (ErrorFallback hides details in release).
 - [Clerk Expo prod-only auth failures](clerk-expo-prod-signin.md) — sign-up needs the `clerk-captcha` node (prod rejects without it); use `useSSO()`, never hand-rolled OAuth; prod FAPI host is unreachable.
