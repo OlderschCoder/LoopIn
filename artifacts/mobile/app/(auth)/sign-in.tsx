@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  View,
 } from "react-native";
 import { useAuth, useClerk, useSSO } from "@clerk/expo";
 import { useRouter } from "expo-router";
@@ -94,6 +95,45 @@ export default function SignInScreen() {
     return false;
   };
 
+  /**
+   * A Google identity with no user in *this* Clerk instance comes back as a
+   * sign-in that cannot proceed: `status` is "needs_identifier" and the OAuth
+   * verification is flagged "transferable". Clerk expects the app to convert
+   * that attempt into a sign-up before anything else can happen.
+   *
+   * startSSOFlow does this internally, so the warm path never needs it. The
+   * cold-start path below performs its own signIn.reload(), so it has to
+   * replicate the step — without it a first-time Google user dead-ends on
+   * `Google sign-in stopped at "needs_identifier"`.
+   *
+   * Returns true when the caller should stop, either signed in or told why not.
+   */
+  const completeOAuthTransfer = async (attempt: any): Promise<boolean> => {
+    if (attempt?.firstFactorVerification?.status !== "transferable") return false;
+
+    const created = await clerk.client!.signUp.create({ transfer: true } as any);
+    if (created.createdSessionId) {
+      await clerk.setActive({ session: created.createdSessionId });
+      goHome();
+      return true;
+    }
+
+    // The account couldn't be completed from the Google profile alone — this
+    // instance wants fields Google didn't supply. Name them rather than
+    // printing a bare status code.
+    if (created.status === "missing_requirements") {
+      const missing = ((created as any).missingFields ?? []).join(", ");
+      setError(
+        missing
+          ? `Google didn't provide everything this account needs (${missing}). Create the account with email instead.`
+          : "Google sign-in needs more information to finish. Create the account with email instead.",
+      );
+      return true;
+    }
+
+    return false;
+  };
+
   const handleGoogle = async () => {
     setBusy(true);
     setError(null);
@@ -122,8 +162,24 @@ export default function SignInScreen() {
         return;
       }
 
+      // startSSOFlow performs the transfer itself, but repeat it defensively:
+      // if its internal signUp.create() didn't yield a session we still hold a
+      // usable attempt here.
+      if (signIn && (await completeOAuthTransfer(signIn))) return;
+
       // Otherwise the attempt needs a further step — usually the emailed code.
       if (signIn && (await continueSignIn(signIn))) return;
+
+      // The transfer ran but Clerk wants fields Google didn't provide.
+      if (signUp?.status === "missing_requirements") {
+        const missing = ((signUp as any).missingFields ?? []).join(", ");
+        setError(
+          missing
+            ? `Google didn't provide everything this account needs (${missing}). Create the account with email instead.`
+            : "Google sign-in needs more information to finish. Create the account with email instead.",
+        );
+        return;
+      }
 
       // Never fail silently. If we land here the flow stopped for a reason we
       // don't explicitly handle, and the user is owed an explanation.
@@ -165,6 +221,10 @@ export default function SignInScreen() {
           rotatingTokenNonce: nonce ? decodeURIComponent(nonce) : "",
         });
         const attempt = clerk.client!.signIn;
+        // This is the path that produced the reported failure. Unlike
+        // startSSOFlow, the reload above does not transfer a brand-new Google
+        // user into a sign-up, so do that before deciding the flow failed.
+        if (!cancelled && (await completeOAuthTransfer(attempt))) return;
         // continueSignIn handles both "complete" and the emailed-code step.
         if (!(await continueSignIn(attempt)) && !cancelled) {
           setError(
@@ -330,6 +390,12 @@ export default function SignInScreen() {
             <Text style={styles.btnText}>Continue with Google</Text>
           )}
         </Pressable>
+
+        {/* Clerk renders its bot-protection challenge into this node. The
+            Google button can create an account through the transfer flow, and
+            the production instance has captcha enabled, so signUp.create() is
+            rejected outright when this node is absent. */}
+        <View nativeID="clerk-captcha" />
 
         <Text style={styles.orText}>— or sign in with email —</Text>
 
