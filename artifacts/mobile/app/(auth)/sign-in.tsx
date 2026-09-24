@@ -16,6 +16,9 @@ import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
 import * as Linking from "expo-linking";
 
+import { activateClerkSession } from "@/utils/clerkSession";
+import { claimRotatingTokenNonce } from "@/utils/oauthCallback";
+
 WebBrowser.maybeCompleteAuthSession();
 
 /**
@@ -61,7 +64,19 @@ export default function SignInScreen() {
   // one. Google sign-in has no email typed into the form to fall back on.
   const [secondFactorEmailId, setSecondFactorEmailId] = useState<string | null>(null);
 
-  const goHome = () => router.replace("/(tabs)");
+  type SetActive = typeof clerk.setActive;
+
+  const activateCreatedSession = async (
+    sessionId: string,
+    setActive?: SetActive,
+  ) => {
+    await activateClerkSession(
+      () => clerk.client,
+      sessionId,
+      setActive ?? ((params) => clerk.setActive(params)),
+      () => clerk.session?.id,
+    );
+  };
 
   /**
    * Advance a sign-in attempt that is not yet complete. Returns true when the
@@ -69,8 +84,10 @@ export default function SignInScreen() {
    */
   const continueSignIn = async (attempt: any): Promise<boolean> => {
     if (attempt?.status === "complete") {
-      await clerk.setActive({ session: attempt.createdSessionId });
-      goHome();
+      if (!attempt.createdSessionId) {
+        throw new Error("Clerk completed sign-in without creating a session.");
+      }
+      await activateCreatedSession(attempt.createdSessionId);
       return true;
     }
 
@@ -152,8 +169,7 @@ export default function SignInScreen() {
 
     const created = await clerk.client!.signUp.create({ transfer: true } as any);
     if (created.createdSessionId) {
-      await clerk.setActive({ session: created.createdSessionId });
-      goHome();
+      await activateCreatedSession(created.createdSessionId);
       return true;
     }
 
@@ -182,21 +198,19 @@ export default function SignInScreen() {
       // production proxy. The previous hand-rolled version opened the browser
       // itself and gave up after a 2.5s timer, then returned *silently* —
       // which is why sign-in appeared to do nothing at all.
-      const { createdSessionId, signIn, signUp } = await startSSOFlow({
+      const { createdSessionId, signIn, signUp, setActive } = await startSSOFlow({
         strategy: "oauth_google",
         redirectUrl: AuthSession.makeRedirectUri(),
       });
 
       if (createdSessionId) {
-        await clerk.setActive({ session: createdSessionId });
-        goHome();
+        await activateCreatedSession(createdSessionId, setActive);
         return;
       }
 
       // First-time Google user: Clerk creates a sign-up rather than a sign-in.
       if (signUp?.createdSessionId) {
-        await clerk.setActive({ session: signUp.createdSessionId });
-        goHome();
+        await activateCreatedSession(signUp.createdSessionId, setActive);
         return;
       }
 
@@ -248,13 +262,14 @@ export default function SignInScreen() {
       // is AuthSession.makeRedirectUri() with no path, so the SDK's own
       // "sso-callback" path never appears in the callback URL — a path check
       // silently disables this whole recovery.
-      if (cancelled || !url || !/[?&]rotating_token_nonce=/.test(url)) return;
+      if (cancelled) return;
+      const nonce = claimRotatingTokenNonce(url);
+      if (!nonce) return;
       setBusy(true);
       setError(null);
       try {
-        const nonce = url.match(/[?&]rotating_token_nonce=([^&]+)/)?.[1];
         await clerk.client!.signIn.reload({
-          rotatingTokenNonce: nonce ? decodeURIComponent(nonce) : "",
+          rotatingTokenNonce: nonce,
         });
         const attempt = clerk.client!.signIn;
         // This is the path that produced the reported failure. Unlike
@@ -322,9 +337,8 @@ export default function SignInScreen() {
         strategy: "email_code",
         code: code.trim(),
       } as any);
-      if (attempt.status === "complete") {
-        await clerk.setActive({ session: attempt.createdSessionId });
-        goHome();
+      if (attempt.status === "complete" && attempt.createdSessionId) {
+        await activateCreatedSession(attempt.createdSessionId);
       } else {
         setError("That code didn't work. Please try again.");
       }
@@ -374,8 +388,7 @@ export default function SignInScreen() {
       const updated = await clerk.client!.signUp.update(payload as any);
 
       if (updated.createdSessionId) {
-        await clerk.setActive({ session: updated.createdSessionId });
-        goHome();
+        await activateCreatedSession(updated.createdSessionId);
         return;
       }
 

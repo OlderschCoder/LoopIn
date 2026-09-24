@@ -22,11 +22,12 @@ import {
   View,
 } from "react-native";
 import { reloadAppAsync } from "expo";
-import { ClerkProvider, ClerkLoaded, useClerk } from "@clerk/expo";
+import { ClerkProvider, ClerkLoaded, useAuth } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppProvider, useApp } from "@/context/AppContext";
+import { resolveAuthRedirect } from "@/utils/authRouting";
 
 SplashScreen.preventAutoHideAsync();
 import { resolveClerkProxyUrl } from "@/utils/clerkProxy";
@@ -328,55 +329,11 @@ function RootLayoutNav() {
 // Redirects unauthenticated users to the sign-in flow and keeps signed-in users
 // out of the auth screens.
 function AuthGate() {
-  const clerk = useClerk();
+  const { isLoaded, isSignedIn } = useAuth({
+    treatPendingAsSignedOut: false,
+  });
   const segments = useSegments();
   const router = useRouter();
-  // NOTE: useAuth()'s isSignedIn is unreliable in this @clerk/expo version
-  // (stays stale after setActive() in some flows). We subscribe directly to
-  // Clerk's low-level listener instead, which is the primitive every hook
-  // internally relies on and is guaranteed to fire on session changes.
-  //
-  // The listener only forces a re-render — it must NOT be the source of truth.
-  // `setActive()` populates `clerk.session` synchronously, but a listener-driven
-  // setState lands a tick later. Navigation after sign-in is immediate, so the
-  // redirect effect below would run while state still said "signed out" and
-  // bounce the user straight back to the login screen. Reading the Clerk
-  // singleton during render keeps the gate consistent with what actually
-  // happened.
-  const [, forceRender] = React.useReducer((n: number) => n + 1, 0);
-
-  useEffect(() => {
-    const unsubscribe = clerk.addListener(() => forceRender());
-    return unsubscribe;
-  }, [clerk]);
-
-  const loaded = !!clerk.loaded;
-  const signedIn = !!clerk.session;
-
-  useEffect(() => {
-    if (!signedIn || !clerk.session) return;
-    // Verify the cached session is actually still valid server-side.
-    // If the underlying user was deleted, sign out so the user can
-    // re-authenticate cleanly instead of being stuck showing stale state.
-    // IMPORTANT: only sign out when Clerk explicitly reports the session as
-    // invalid — a transient network hiccup (e.g. right after an OAuth
-    // redirect, before the proxy connection has settled) must NOT sign the
-    // user out, or they get bounced straight back to the login screen right
-    // after successfully signing in.
-    clerk.session.getToken().catch((err: any) => {
-      const code = err?.errors?.[0]?.code as string | undefined;
-      const invalidSessionCodes = [
-        "resource_not_found",
-        "session_token_and_uat_claim_check_failed",
-        "authentication_invalid",
-      ];
-      if (code && invalidSessionCodes.includes(code)) {
-        clerk.signOut();
-      } else {
-        console.warn("Session verification failed (non-fatal):", err);
-      }
-    });
-  }, [signedIn, clerk]);
 
   const inAuthGroup = segments[0] === "(auth)";
   // There is no `app/index.tsx`, so the root route renders nothing. A signed-in
@@ -387,13 +344,14 @@ function AuthGate() {
   const atRoot = (segments as string[]).length === 0;
 
   useEffect(() => {
-    if (!loaded) return;
-    if (!signedIn && !inAuthGroup) {
-      router.replace("/(auth)/sign-in");
-    } else if (signedIn && (inAuthGroup || atRoot)) {
-      router.replace("/(tabs)");
-    }
-  }, [loaded, signedIn, inAuthGroup, atRoot, router]);
+    const redirect = resolveAuthRedirect({
+      isLoaded,
+      isSignedIn,
+      inAuthGroup,
+      atRoot,
+    });
+    if (redirect) router.replace(redirect);
+  }, [isLoaded, isSignedIn, inAuthGroup, atRoot, router]);
 
   return <RootLayoutNav />;
 }
