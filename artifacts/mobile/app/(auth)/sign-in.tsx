@@ -48,7 +48,13 @@ export default function SignInScreen() {
   const [error, setError] = useState<string | null>(null);
   // Clerk requires an emailed one-time code as a second step on this instance,
   // so sign-in is two stages: credentials, then the code.
-  const [stage, setStage] = useState<"credentials" | "code">("credentials");
+  const [stage, setStage] = useState<
+    "credentials" | "code" | "complete-signup"
+  >("credentials");
+  // Fields Clerk still requires before a Google-created account can be
+  // finished, and what the user has typed into them.
+  const [missingFields, setMissingFields] = useState<string[]>([]);
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [code, setCode] = useState("");
   const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
   // Remember which address Clerk sent the code to, so "resend" targets the same
@@ -95,6 +101,39 @@ export default function SignInScreen() {
     return false;
   };
 
+  /** "first_name" -> "firstName" (Clerk's update() takes camelCase keys). */
+  const snakeToCamel = (field: string) =>
+    field.replace(/[-_][a-z]/g, (m) => m[1].toUpperCase());
+
+  /** "first_name" -> "First name" */
+  const fieldLabel = (field: string) =>
+    field.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+
+  /**
+   * Clerk reports a *failed* OAuth sign-up on the external-account
+   * verification rather than by throwing. "That email address is taken"
+   * arrives this way, and it is the single most useful thing to show.
+   */
+  const externalAccountError = (attempt: any): string | null =>
+    attempt?.verifications?.externalAccount?.error?.longMessage ??
+    attempt?.verifications?.externalAccount?.error?.message ??
+    null;
+
+  /**
+   * Move to the "finish your account" step when Clerk says the sign-up is
+   * short of required fields. Returns true when it has taken over the screen.
+   */
+  const promptForMissingFields = (attempt: any): boolean => {
+    if (attempt?.status !== "missing_requirements") return false;
+    const missing = (attempt.missingFields ?? []) as string[];
+    if (missing.length === 0) return false;
+    setMissingFields(missing);
+    setFieldValues({});
+    setError(null);
+    setStage("complete-signup");
+    return true;
+  };
+
   /**
    * A Google identity with no user in *this* Clerk instance comes back as a
    * sign-in that cannot proceed: `status` is "needs_identifier" and the OAuth
@@ -119,19 +158,18 @@ export default function SignInScreen() {
     }
 
     // The account couldn't be completed from the Google profile alone — this
-    // instance wants fields Google didn't supply. Name them rather than
-    // printing a bare status code.
-    if (created.status === "missing_requirements") {
-      const missing = ((created as any).missingFields ?? []).join(", ");
-      setError(
-        missing
-          ? `Google didn't provide everything this account needs (${missing}). Create the account with email instead.`
-          : "Google sign-in needs more information to finish. Create the account with email instead.",
-      );
-      return true;
-    }
+    // instance wants fields Google didn't supply. Collect them in-app rather
+    // than dead-ending the user.
+    if (promptForMissingFields(created)) return true;
 
-    return false;
+    // The transfer request ran, so whatever came back *is* the outcome.
+    // Returning false here would let the caller fall through and report the
+    // stale sign-in status ("needs_identifier") instead of what happened.
+    setError(
+      externalAccountError(created) ??
+        `Google sign-in couldn't finish (${created.status}). Please sign in with email instead.`,
+    );
+    return true;
   };
 
   const handleGoogle = async () => {
@@ -162,32 +200,26 @@ export default function SignInScreen() {
         return;
       }
 
-      // startSSOFlow performs the transfer itself, but repeat it defensively:
-      // if its internal signUp.create() didn't yield a session we still hold a
-      // usable attempt here.
-      if (signIn && (await completeOAuthTransfer(signIn))) return;
+      // NOTE: startSSOFlow has already awaited signUp.create({ transfer: true })
+      // internally for a first-time Google user, so `signUp` — not `signIn` —
+      // carries the real outcome from here on. Re-running the transfer would
+      // re-POST an already-created sign-up and mask its state, so don't.
 
-      // Otherwise the attempt needs a further step — usually the emailed code.
+      // Clerk wants fields Google didn't supply. Collect them in-app.
+      if (promptForMissingFields(signUp)) return;
+
+      // The sign-in attempt itself may still owe us the emailed code.
       if (signIn && (await continueSignIn(signIn))) return;
 
-      // The transfer ran but Clerk wants fields Google didn't provide.
-      if (signUp?.status === "missing_requirements") {
-        const missing = ((signUp as any).missingFields ?? []).join(", ");
-        setError(
-          missing
-            ? `Google didn't provide everything this account needs (${missing}). Create the account with email instead.`
-            : "Google sign-in needs more information to finish. Create the account with email instead.",
-        );
-        return;
-      }
-
-      // Never fail silently. If we land here the flow stopped for a reason we
-      // don't explicitly handle, and the user is owed an explanation.
-      const stoppedAt = signIn?.status ?? signUp?.status;
+      // Never fail silently. Report the sign-up first: after a transfer,
+      // signIn.status is stale at "needs_identifier", and printing that ahead
+      // of the sign-up's real status is what made this failure unreadable.
+      const stoppedAt = signUp?.status ?? signIn?.status;
       setError(
-        stoppedAt
-          ? `Google sign-in stopped at "${stoppedAt}". Please sign in with email instead.`
-          : "Google sign-in was cancelled or didn't come back. Please try again, or sign in with email.",
+        externalAccountError(signUp) ??
+          (stoppedAt
+            ? `Google sign-in stopped at "${stoppedAt}". Please sign in with email instead.`
+            : "Google sign-in was cancelled or didn't come back. Please try again, or sign in with email."),
       );
     } catch (err: any) {
       const msg =
@@ -212,7 +244,11 @@ export default function SignInScreen() {
 
     void (async () => {
       const url = await Linking.getInitialURL().catch(() => null);
-      if (cancelled || !url || !url.includes("sso-callback")) return;
+      // Match on the nonce Clerk appends, not on a path. The redirect URI here
+      // is AuthSession.makeRedirectUri() with no path, so the SDK's own
+      // "sso-callback" path never appears in the callback URL — a path check
+      // silently disables this whole recovery.
+      if (cancelled || !url || !/[?&]rotating_token_nonce=/.test(url)) return;
       setBusy(true);
       setError(null);
       try {
@@ -319,6 +355,52 @@ export default function SignInScreen() {
     }
   };
 
+  /**
+   * Finish a Google-created account that Clerk wouldn't complete from the
+   * Google profile alone (this instance requires a password, for example).
+   * Previously this state was terminal and the user was told to go away and
+   * use email instead.
+   */
+  const handleCompleteSignUp = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const payload: Record<string, string> = {};
+      for (const field of missingFields) {
+        const key = snakeToCamel(field);
+        payload[key] = fieldValues[key] ?? "";
+      }
+
+      const updated = await clerk.client!.signUp.update(payload as any);
+
+      if (updated.createdSessionId) {
+        await clerk.setActive({ session: updated.createdSessionId });
+        goHome();
+        return;
+      }
+
+      // Clerk can reveal further requirements one round at a time.
+      if (promptForMissingFields(updated)) {
+        setError("A bit more is still needed to finish your account.");
+        return;
+      }
+
+      setError(
+        externalAccountError(updated) ??
+          `Couldn't finish creating the account (${updated.status}).`,
+      );
+    } catch (err: any) {
+      setError(
+        err?.errors?.[0]?.longMessage ??
+          err?.errors?.[0]?.message ??
+          err?.message ??
+          "Couldn't finish creating the account.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.flex}
@@ -327,7 +409,62 @@ export default function SignInScreen() {
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>LoopIn</Text>
 
-        {stage === "code" ? (
+        {stage === "complete-signup" ? (
+          <>
+            <Text style={styles.subtitle}>
+              Almost there — Google didn't give us everything your account
+              needs.
+            </Text>
+
+            {missingFields.map((field) => {
+              const key = snakeToCamel(field);
+              const isPassword = field.includes("password");
+              return (
+                <TextInput
+                  key={field}
+                  style={styles.input}
+                  placeholder={fieldLabel(field)}
+                  secureTextEntry={isPassword}
+                  autoCapitalize="none"
+                  value={fieldValues[key] ?? ""}
+                  onChangeText={(text) =>
+                    setFieldValues((prev) => ({ ...prev, [key]: text }))
+                  }
+                  editable={!busy}
+                />
+              );
+            })}
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            {/* Clerk's bot protection renders its challenge into this node. */}
+            <View nativeID="clerk-captcha" />
+
+            <Pressable
+              style={[styles.button, busy && styles.disabled]}
+              onPress={handleCompleteSignUp}
+              disabled={busy}
+            >
+              {busy ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.btnText}>Finish creating account</Text>
+              )}
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                setStage("credentials");
+                setMissingFields([]);
+                setFieldValues({});
+                setError(null);
+              }}
+              disabled={busy}
+            >
+              <Text style={styles.linkText}>Cancel</Text>
+            </Pressable>
+          </>
+        ) : stage === "code" ? (
           <>
             <Text style={styles.subtitle}>
               Enter the 6-digit code we emailed to{"\n"}
