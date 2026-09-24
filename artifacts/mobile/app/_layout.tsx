@@ -22,7 +22,7 @@ import {
   View,
 } from "react-native";
 import { reloadAppAsync } from "expo";
-import { ClerkProvider, ClerkLoaded, useAuth } from "@clerk/expo";
+import { ClerkProvider, ClerkLoaded, useClerk } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -329,11 +329,20 @@ function RootLayoutNav() {
 // Redirects unauthenticated users to the sign-in flow and keeps signed-in users
 // out of the auth screens.
 function AuthGate() {
-  const { isLoaded, isSignedIn } = useAuth({
-    treatPendingAsSignedOut: false,
-  });
+  const clerk = useClerk();
   const segments = useSegments();
   const router = useRouter();
+
+  // In this Clerk Expo version, useAuth().isSignedIn can remain stale for a
+  // render immediately after setActive(). That makes a successful Google OAuth
+  // return look signed out and bounces the user straight back to this screen.
+  // Subscribe only to force a render, then read the live Clerk singleton as the
+  // source of truth; setActive() updates it before its promise resolves.
+  const [, forceRender] = React.useReducer((n: number) => n + 1, 0);
+  useEffect(() => clerk.addListener(() => forceRender()), [clerk]);
+
+  const isLoaded = !!clerk.loaded;
+  const isSignedIn = !!clerk.session;
 
   const inAuthGroup = segments[0] === "(auth)";
   // There is no `app/index.tsx`, so the root route renders nothing. A signed-in
