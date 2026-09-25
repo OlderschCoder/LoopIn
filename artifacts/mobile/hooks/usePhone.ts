@@ -1,13 +1,15 @@
 import { useAuth } from "@clerk/expo";
+import * as Crypto from "expo-crypto";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 // EXPO_PUBLIC_API_URL must be set at EAS build time, e.g.
-//   "https://30ec.spock.replit.dev"   (preview)
-//   "https://safedate-ai.replit.app"  (production)
+//   "https://safedateai.com" (production)
 // Fall back to EXPO_PUBLIC_DOMAIN (legacy) then empty string.
 const _rawUrl =
   process.env.EXPO_PUBLIC_API_URL ||
-  (process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : "");
+  (process.env.EXPO_PUBLIC_DOMAIN
+    ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+    : "");
 
 const BASE_URL = _rawUrl.replace(/\/$/, ""); // strip any trailing slash
 
@@ -17,9 +19,9 @@ export interface PhoneNumberRow {
   twilioSid: string;
   areaCode: string | null;
   ownerRealPhone: string | null;
+  messagingCampaignId?: string | null;
   createdAt: string;
 }
-
 export interface Conversation {
   id: string;
   userId: string;
@@ -52,6 +54,16 @@ export interface PhoneCall {
   createdAt: string;
 }
 
+export interface PhoneEligibility {
+  authenticated: boolean;
+  userId: string;
+  eligible: boolean;
+  existingNumber: string | null;
+  purchaseRequired: boolean;
+  purchaseStarted: boolean;
+  blockingReasons: string[];
+}
+
 // Format an E.164 US number for display, e.g. +18667065127 -> (866) 706-5127.
 export function formatPhone(input?: string | null): string {
   if (!input) return "";
@@ -82,7 +94,9 @@ export function usePhone() {
   // ticks, which would cascade into new `phone` objects → new `load` callbacks
   // → useFocusEffect re-firing → infinite fetch loops.
   const getTokenRef = useRef(getToken);
-  useEffect(() => { getTokenRef.current = getToken; }, [getToken]);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
 
   const authed = useCallback(
     async (path: string, init: RequestInit = {}): Promise<any> => {
@@ -123,7 +137,9 @@ export function usePhone() {
 
       // 304 has no body — guard before parsing
       if (res.status === 304) {
-        throw new Error("Received empty response (304). Please pull to refresh.");
+        throw new Error(
+          "Received empty response (304). Please pull to refresh.",
+        );
       }
 
       const text = await res.text();
@@ -156,7 +172,8 @@ export function usePhone() {
         body: JSON.stringify({ base64, mimeType }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || `Upload failed (${res.status})`);
+      if (!res.ok)
+        throw new Error(json?.error || `Upload failed (${res.status})`);
       return json;
     },
     [], // stable — reads getToken via ref
@@ -164,10 +181,40 @@ export function usePhone() {
 
   return useMemo(
     () => ({
-      getNumber: (): Promise<{ number: PhoneNumberRow | null; configured: boolean }> =>
-        authed("/phone/number"),
-      setup: (body: { areaCode?: string; realPhone?: string }): Promise<{ number: PhoneNumberRow }> =>
-        authed("/phone/setup", { method: "POST", body: JSON.stringify(body) }),
+      getNumber: (): Promise<{
+        number: PhoneNumberRow | null;
+        configured: boolean;
+      }> => authed("/phone/number"),
+      getEligibility: (): Promise<PhoneEligibility> =>
+        authed("/phone/eligibility"),
+      setup: async (body: {
+        areaCode?: string;
+        realPhone?: string;
+      }): Promise<{ number: PhoneNumberRow }> => {
+        const key = Crypto.randomUUID();
+        for (let attempt = 0; attempt < 12; attempt += 1) {
+          const result = await authed("/phone/setup", {
+            method: "POST",
+            headers: { "Idempotency-Key": key },
+            body: JSON.stringify(body),
+          });
+          if (result?.number) return result;
+          if (result?.status === "reconcile") {
+            throw new Error(
+              "Number setup needs support review. No number was reported active.",
+            );
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1_000));
+        }
+        throw new Error(
+          "Your number is still being provisioned. Try again shortly; LoopIn will resume the same order.",
+        );
+      },
+      releaseNumber: (): Promise<{ ok: boolean; released: boolean }> =>
+        authed("/phone/number", {
+          method: "DELETE",
+          headers: { "Idempotency-Key": Crypto.randomUUID() },
+        }),
       listConversations: (): Promise<{ conversations: Conversation[] }> =>
         authed("/phone/conversations"),
       getMessages: (
@@ -179,14 +226,27 @@ export function usePhone() {
         contactName?: string;
         body: string;
         mediaUrl?: string;
-      }): Promise<{ ok: boolean; messageId: string; conversationId: string; status: string }> =>
-        authed("/phone/messages", { method: "POST", body: JSON.stringify(body) }),
+      }): Promise<{
+        ok: boolean;
+        messageId: string;
+        conversationId: string;
+        status: string;
+      }> =>
+        authed("/phone/messages", {
+          method: "POST",
+          headers: { "Idempotency-Key": Crypto.randomUUID() },
+          body: JSON.stringify(body),
+        }),
       uploadMedia,
       startCall: (body: {
         to: string;
         contactName?: string;
       }): Promise<{ ok: boolean; callId: string; status: string }> =>
-        authed("/phone/call", { method: "POST", body: JSON.stringify(body) }),
+        authed("/phone/call", {
+          method: "POST",
+          headers: { "Idempotency-Key": Crypto.randomUUID() },
+          body: JSON.stringify(body),
+        }),
       listCalls: (): Promise<{ calls: PhoneCall[] }> => authed("/phone/calls"),
     }),
     [authed, uploadMedia],

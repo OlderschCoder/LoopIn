@@ -23,7 +23,9 @@ jobs:
     # during assemble/bundle — NOT during prebuild. They must be set job-wide or
     # the shipped app gets `undefined` with no build-time warning.
     env:
-      EXPO_PUBLIC_API_URL: https://safe-date-ai-1.replit.app
+      EXPO_PUBLIC_API_URL: https://safedateai.com
+      EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_live_YWNjb3VudHMuc2FmZS1kYXRlLWFpLTEucmVwbGl0LmFwcCQ=
+      EXPO_PUBLIC_CLERK_PROXY_URL: https://safedateai.com/api/__clerk
 
     steps:
       # ── Checkout ────────────────────────────────────────────────────────────

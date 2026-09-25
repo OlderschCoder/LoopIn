@@ -9,7 +9,9 @@
       "distribution": "internal",
       "channel": "development",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://30ec738f-0daf-487e-86bf-e64d3abcd779-00-2aqcxqmeernl2.spock.replit.dev"
+        "EXPO_PUBLIC_API_URL": "https://safedateai.com",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_YWNjb3VudHMuc2FmZS1kYXRlLWFpLTEucmVwbGl0LmFwcCQ=",
+        "EXPO_PUBLIC_CLERK_PROXY_URL": "https://safedateai.com/api/__clerk"
       }
     },
     "preview": {
@@ -19,12 +21,19 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://safe-date-ai-1.replit.app"
+        "EXPO_PUBLIC_API_URL": "https://safedateai.com",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_YWNjb3VudHMuc2FmZS1kYXRlLWFpLTEucmVwbGl0LmFwcCQ=",
+        "EXPO_PUBLIC_CLERK_PROXY_URL": "https://safedateai.com/api/__clerk"
       }
     },
     "production": {
       "channel": "production",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://safedateai.com",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_YWNjb3VudHMuc2FmZS1kYXRlLWFpLTEucmVwbGl0LmFwcCQ=",
+        "EXPO_PUBLIC_CLERK_PROXY_URL": "https://safedateai.com/api/__clerk"
+      }
     }
   },
   "submit": {
