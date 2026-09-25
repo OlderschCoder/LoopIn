@@ -2,7 +2,7 @@
   "expo": {
     "name": "LoopIn",
     "slug": "loopin",
-    "version": "1.0.10",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "loopin",
@@ -24,12 +24,13 @@
         "NSLocationAlwaysAndWhenInUseUsageDescription": "LoopIn keeps your location history on your account so you and your trusted circle can see where you've been, even while the app is in the background.",
         "NSMicrophoneUsageDescription": "LoopIn lets you privately record audio during a date as personal evidence, stored only on your device.",
         "NSPhotoLibraryUsageDescription": "LoopIn lets you save a match's profile photos and screenshots privately on your device.",
-        "NSCameraUsageDescription": "LoopIn lets you snap a photo of a match's profile to keep privately on your device."
+        "NSCameraUsageDescription": "LoopIn lets you capture profile and travel document images you choose to store securely.",
+        "NSFaceIDUsageDescription": "LoopIn uses Face ID to protect access to your encrypted travel documents."
       }
     },
     "android": {
       "package": "com.markbojeun.loopin",
-      "versionCode": 10,
+      "versionCode": 11,
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -56,6 +57,12 @@
       ],
       "expo-font",
       "expo-web-browser",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow LoopIn to use Face ID to protect your encrypted travel documents."
+        }
+      ],
       [
         "expo-location",
         {

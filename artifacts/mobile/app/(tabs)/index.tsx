@@ -15,8 +15,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import DateCard from "@/components/DateCard";
 import { useApp } from "@/context/AppContext";
+import { useTravel } from "@/context/TravelContext";
 import { useCheckIn } from "@/hooks/useCheckIn";
 import { useColors } from "@/hooks/useColors";
+import { useLocation } from "@/hooks/useLocation";
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -35,7 +37,9 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { datePlans, activeCheckIn, trustedContacts } = useApp();
+  const { trips, entitlements, confirmCheckpoint } = useTravel();
   const { endCheckIn } = useCheckIn();
+  const { location, fetchOnce } = useLocation();
   const [greeting] = useState(getGreeting());
 
   const upcoming = datePlans
@@ -43,6 +47,24 @@ export default function HomeScreen() {
     .slice(0, 2);
 
   const hasCircle = trustedContacts.length > 0;
+  const travelOnly = Boolean(entitlements?.travelAccess && !entitlements.coreAccess);
+  const activeTrip = trips.find((trip) => trip.status === "active") ?? trips.find((trip) => trip.status === "upcoming");
+  const tools = travelOnly
+    ? [
+        { icon: "map" as const, label: "Trip Plans", sub: "Itinerary + check-ins", onPress: () => router.push("/(tabs)/plan"), color: colors.primary },
+        { icon: "phone-call" as const, label: "Private Phone", sub: "Keep your number private", onPress: () => router.push("/(tabs)/phone"), color: "#0369A1" },
+        { icon: "users" as const, label: "Travel Group", sub: "Primary + backup contacts", onPress: () => router.push("/(tabs)/plan"), color: "#059669" },
+      ]
+    : [
+        { icon: "zap" as const, label: "AI Analysis", sub: "Red flag check", onPress: () => router.push("/(tabs)/ai"), color: colors.primary },
+        { icon: "calendar" as const, label: "Plan a Date", sub: "Safety scoring", onPress: () => router.push("/plan/new"), color: "#6D28D9" },
+        { icon: "map" as const, label: "Trip Plans", sub: "Travel safety", onPress: () => router.push("/(tabs)/plan"), color: "#7C3AED" },
+        { icon: "phone-call" as const, label: "Fake Call", sub: "Instant exit", onPress: () => router.push("/setup-fake-call"), color: "#0369A1" },
+        { icon: "message-circle" as const, label: "AI Coach", sub: "Get guidance", onPress: () => router.push("/coach"), color: "#DB2777" },
+        { icon: "mic" as const, label: "Record Date", sub: "Private audio", onPress: () => router.push("/record"), color: "#0891B2" },
+        { icon: "lock" as const, label: "Evidence Locker", sub: "Private notes", onPress: () => router.push("/(tabs)/locker"), color: "#059669" },
+        { icon: "heart" as const, label: "Reflect", sub: "Track patterns", onPress: () => router.push("/(tabs)/reflect"), color: "#D97706" },
+      ];
   const topPadding = Platform.OS === "web" ? 67 + 16 : insets.top + 16;
 
   async function handleImSafe() {
@@ -90,8 +112,37 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {activeTrip && (
+        <LinearGradient colors={["#0F3D4C", "#155E75"]} style={styles.travelCard}>
+          <View style={styles.travelTopRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.travelEyebrow}>{activeTrip.status === "active" ? "ACTIVE TRIP" : "UPCOMING TRIP"}</Text>
+              <Text style={styles.travelName}>{activeTrip.name}</Text>
+              <Text style={styles.travelDestination}>{activeTrip.destination}</Text>
+            </View>
+            <TouchableOpacity onPress={() => router.push(`/travel/${activeTrip.id}`)} style={styles.travelOpenBtn}>
+              <Feather name="arrow-up-right" size={18} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.travelCheckpointRow}>
+            <Feather name="clock" size={14} color="rgba(255,255,255,0.65)" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.travelCheckpointTitle}>{activeTrip.nextCheckpoint?.title ?? "No checkpoint scheduled"}</Text>
+              <Text style={styles.travelCheckpointTime}>{activeTrip.nextCheckpoint ? new Date(activeTrip.nextCheckpoint.dueAt).toLocaleString() : "Open the trip to add one"}</Text>
+            </View>
+            {activeTrip.nextCheckpoint && (
+              <TouchableOpacity onPress={async () => { const current = location ?? await fetchOnce(); await confirmCheckpoint(activeTrip.nextCheckpoint!.id, current ? { lat: current.lat, lng: current.lng, locationLabel: current.address } : {}); }} style={styles.travelSafeBtn}>
+                <Feather name="check" size={14} color="#065F46" />
+                <Text style={styles.travelSafeText}>I'm Safe</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <Text style={styles.travelFreshness}>Provider freshness: {activeTrip.providerFreshAt ? new Date(activeTrip.providerFreshAt).toLocaleString() : "awaiting first live update"}</Text>
+        </LinearGradient>
+      )}
+
       {/* ── Safety Circle status card ── */}
-      <LinearGradient
+      {!travelOnly && <LinearGradient
         colors={activeCheckIn ? ["#1E1035", "#2D1B69"] : ["#1E1035", "#3B1F6D"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -161,10 +212,10 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </>
         )}
-      </LinearGradient>
+      </LinearGradient>}
 
       {/* ── Two hero action buttons ── */}
-      <View style={styles.heroActions}>
+      {!travelOnly && <View style={styles.heroActions}>
         <TouchableOpacity
           onPress={() => activeCheckIn ? router.push("/checkin") : router.push("/start-checkin")}
           activeOpacity={0.85}
@@ -194,7 +245,7 @@ export default function HomeScreen() {
             {activeCheckIn ? "End & notify circle" : "Let your circle know"}
           </Text>
         </TouchableOpacity>
-      </View>
+      </View>}
 
       {/* ── Walk Me Home banner ── */}
       <TouchableOpacity
@@ -235,15 +286,7 @@ export default function HomeScreen() {
       {/* ── Features grid ── */}
       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Tools</Text>
       <View style={styles.featureGrid}>
-        {[
-          { icon: "zap" as const, label: "AI Analysis", sub: "Red flag check", onPress: () => router.push("/(tabs)/ai"), color: colors.primary },
-          { icon: "calendar" as const, label: "Plan a Date", sub: "Safety scoring", onPress: () => router.push("/plan/new"), color: "#6D28D9" },
-          { icon: "phone-call" as const, label: "Fake Call", sub: "Instant exit", onPress: () => router.push("/setup-fake-call"), color: "#0369A1" },
-          { icon: "message-circle" as const, label: "AI Coach", sub: "Get guidance", onPress: () => router.push("/coach"), color: "#DB2777" },
-          { icon: "mic" as const, label: "Record Date", sub: "Private audio", onPress: () => router.push("/record"), color: "#0891B2" },
-          { icon: "lock" as const, label: "Evidence Locker", sub: "Private notes", onPress: () => router.push("/(tabs)/locker"), color: "#059669" },
-          { icon: "heart" as const, label: "Reflect", sub: "Track patterns", onPress: () => router.push("/(tabs)/reflect"), color: "#D97706" },
-        ].map((item) => (
+        {tools.map((item) => (
           <TouchableOpacity
             key={item.label}
             onPress={item.onPress}
@@ -260,7 +303,7 @@ export default function HomeScreen() {
       </View>
 
       {/* ── Upcoming dates ── */}
-      {upcoming.length > 0 && (
+      {!travelOnly && upcoming.length > 0 && (
         <>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Upcoming dates</Text>
@@ -275,13 +318,13 @@ export default function HomeScreen() {
       )}
 
       {/* ── Safety tip ── */}
-      <View style={[styles.tipCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+      {!travelOnly && <View style={[styles.tipCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
         <Feather name="info" size={14} color={colors.primary} />
         <Text style={[styles.tipText, { color: colors.mutedForeground }]}>
           <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.foreground }}>Tip: </Text>
           Add at least one trusted contact before every date. They'll be alerted automatically if you miss a check-in.
         </Text>
-      </View>
+      </View>}
     </ScrollView>
   );
 }
@@ -296,6 +339,19 @@ const styles = StyleSheet.create({
   iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", borderWidth: 1 },
   sosHeaderBtn: { backgroundColor: "#E11D48", paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, shadowColor: "#E11D48", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 5 },
   sosHeaderText: { color: "#FFFFFF", fontSize: 13, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
+
+  travelCard: { borderRadius: 22, padding: 20, marginBottom: 14, gap: 14 },
+  travelTopRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  travelEyebrow: { fontSize: 10, fontFamily: "Inter_700Bold", color: "#A5F3FC", letterSpacing: 1 },
+  travelName: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#FFFFFF", marginTop: 3 },
+  travelDestination: { fontSize: 13, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.65)", marginTop: 2 },
+  travelOpenBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" },
+  travelCheckpointRow: { flexDirection: "row", alignItems: "center", gap: 9, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.14)", paddingTop: 13 },
+  travelCheckpointTitle: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#FFFFFF" },
+  travelCheckpointTime: { fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 },
+  travelSafeBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#D1FAE5", borderRadius: 14, paddingHorizontal: 10, paddingVertical: 7 },
+  travelSafeText: { fontSize: 11, fontFamily: "Inter_700Bold", color: "#065F46" },
+  travelFreshness: { fontSize: 10, color: "rgba(255,255,255,0.5)" },
 
   circleCard: { borderRadius: 22, padding: 22, marginBottom: 14, gap: 6 },
   circleCardRow: { flexDirection: "row", alignItems: "center", gap: 7 },

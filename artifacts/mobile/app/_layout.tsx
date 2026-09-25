@@ -27,6 +27,7 @@ import { tokenCache } from "@clerk/expo/token-cache";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppProvider, useApp } from "@/context/AppContext";
+import { TravelProvider } from "@/context/TravelContext";
 import { resolveAuthRedirect } from "@/utils/authRouting";
 
 SplashScreen.preventAutoHideAsync();
@@ -292,6 +293,8 @@ function RootLayoutNav() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="coach" options={{ headerShown: false, presentation: "modal" }} />
         <Stack.Screen name="plan/new" options={{ headerShown: false, presentation: "modal" }} />
+        <Stack.Screen name="travel/new" options={{ headerShown: false, presentation: "modal" }} />
+        <Stack.Screen name="travel/[id]" options={{ headerShown: false, presentation: "card" }} />
         <Stack.Screen name="checkin" options={{ headerShown: false, presentation: "modal" }} />
         <Stack.Screen name="start-checkin" options={{ headerShown: false, presentation: "modal" }} />
         <Stack.Screen name="setup-fake-call" options={{ headerShown: false, presentation: "modal" }} />
@@ -700,11 +703,13 @@ export default function RootLayout() {
             <ErrorBoundary>
               <QueryClientProvider client={queryClient}>
                 <AppProvider>
-                  <GestureHandlerRootView>
-                    <KeyboardProvider>
-                      <AuthGate />
-                    </KeyboardProvider>
-                  </GestureHandlerRootView>
+                  <TravelProvider>
+                    <GestureHandlerRootView>
+                      <KeyboardProvider>
+                        <AuthGate />
+                      </KeyboardProvider>
+                    </GestureHandlerRootView>
+                  </TravelProvider>
                 </AppProvider>
               </QueryClientProvider>
             </ErrorBoundary>

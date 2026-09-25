@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Platform,
@@ -16,6 +16,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import DateCard from "@/components/DateCard";
 import { useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
+import TravelPlansPanel, { PlanKindToggle } from "@/components/TravelPlansPanel";
+import { useTravel } from "@/context/TravelContext";
 
 const PLATFORM_COLORS: Record<string, string> = {
   tinder: "#FE3C72",
@@ -32,7 +34,15 @@ export default function PlanScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { datePlans, deleteDatePlan, matchProfiles } = useApp();
+  const { entitlements } = useTravel();
   const [filter, setFilter] = useState<FilterTab>("upcoming");
+  const [planKind, setPlanKind] = useState<"dates" | "trips">("dates");
+
+  useEffect(() => {
+    if (entitlements && !entitlements.coreAccess && entitlements.travelAccess) setPlanKind("trips");
+  }, [entitlements]);
+
+  if (planKind === "trips") return <TravelPlansPanel onShowDates={() => setPlanKind("dates")} />;
 
   const topPadding = Platform.OS === "web" ? 67 + 16 : insets.top + 16;
 
@@ -82,6 +92,8 @@ export default function PlanScreen() {
             <Feather name="plus" size={20} color={colors.primaryForeground} />
           </TouchableOpacity>
         </View>
+
+        <PlanKindToggle value="dates" onChange={setPlanKind} />
 
         {/* Filter Tabs */}
         <View style={[styles.filterRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>

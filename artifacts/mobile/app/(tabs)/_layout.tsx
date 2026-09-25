@@ -8,34 +8,37 @@ import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
+import { useTravel } from "@/context/TravelContext";
 
 function NativeTabLayout() {
+  const { entitlements } = useTravel();
+  const travelOnly = Boolean(entitlements?.travelAccess && !entitlements.coreAccess);
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: "house", selected: "house.fill" }} />
         <Label>Home</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="ai">
+      {!travelOnly && <NativeTabs.Trigger name="ai">
         <Icon sf={{ default: "sparkles", selected: "sparkles" }} />
         <Label>AI</Label>
-      </NativeTabs.Trigger>
+      </NativeTabs.Trigger>}
       <NativeTabs.Trigger name="phone">
         <Icon sf={{ default: "phone", selected: "phone.fill" }} />
         <Label>Phone</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="plan">
-        <Icon sf={{ default: "calendar", selected: "calendar.fill" }} />
+        <Icon sf={{ default: "calendar", selected: "calendar" }} />
         <Label>Plan</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="reflect">
+      {!travelOnly && <NativeTabs.Trigger name="reflect">
         <Icon sf={{ default: "heart", selected: "heart.fill" }} />
         <Label>Reflect</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="locker">
+      </NativeTabs.Trigger>}
+      {!travelOnly && <NativeTabs.Trigger name="locker">
         <Icon sf={{ default: "lock.shield", selected: "lock.shield.fill" }} />
         <Label>Locker</Label>
-      </NativeTabs.Trigger>
+      </NativeTabs.Trigger>}
     </NativeTabs>
   );
 }
@@ -46,6 +49,8 @@ function ClassicTabLayout() {
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
+  const { entitlements } = useTravel();
+  const travelOnly = Boolean(entitlements?.travelAccess && !entitlements.coreAccess);
 
   return (
     <Tabs
@@ -95,6 +100,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="ai"
         options={{
+          href: travelOnly ? null : undefined,
           title: "AI",
           tabBarIcon: ({ color }) =>
             isIOS ? (
@@ -131,6 +137,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="reflect"
         options={{
+          href: travelOnly ? null : undefined,
           title: "Reflect",
           tabBarIcon: ({ color }) =>
             isIOS ? (
@@ -143,6 +150,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="locker"
         options={{
+          href: travelOnly ? null : undefined,
           title: "Locker",
           tabBarIcon: ({ color }) =>
             isIOS ? (

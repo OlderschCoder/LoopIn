@@ -180,8 +180,8 @@ function PinOverlay({
 // ─── SOS hold ring ───────────────────────────────────────────────────────────
 function SOSButton({ onSOS }: { onSOS: () => void }) {
   const holdAnim = useRef(new Animated.Value(0)).current;
-  const holdRef = useRef<ReturnType<typeof setTimeout>>();
-  const hapticRef = useRef<ReturnType<typeof setInterval>>();
+  const holdRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const hapticRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const [holding, setHolding] = useState(false);
 
   function startHold() {
@@ -248,7 +248,7 @@ export default function DateNightScreen() {
   const [pinAttempts, setPinAttempts] = useState(0);
   const [liked, setLiked] = useState(false);
   const tapCount = useRef(0);
-  const tapTimer = useRef<ReturnType<typeof setTimeout>>();
+  const tapTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Check-in countdown
   const [remaining, setRemaining] = useState(0);
