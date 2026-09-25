@@ -346,7 +346,11 @@ export default function PhoneSetupScreen() {
                     { color: colors.primaryForeground },
                   ]}
                 >
-                  {existing ? "Save changes" : "Get my private number"}
+                  {existing
+                    ? "Save changes"
+                    : eligibility?.eligible === false
+                      ? "Waiting for carrier approval"
+                      : "Get my private number"}
                 </Text>
               </>
             )}

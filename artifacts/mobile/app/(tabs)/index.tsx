@@ -51,14 +51,14 @@ export default function HomeScreen() {
   const activeTrip = trips.find((trip) => trip.status === "active") ?? trips.find((trip) => trip.status === "upcoming");
   const tools = travelOnly
     ? [
-        { icon: "map" as const, label: "Trip Plans", sub: "Itinerary + check-ins", onPress: () => router.push("/(tabs)/plan"), color: colors.primary },
+        { icon: "map" as const, label: "Trip Plans", sub: "Itinerary + check-ins", onPress: () => router.push("/(tabs)/travel"), color: colors.primary },
         { icon: "phone-call" as const, label: "Private Phone", sub: "Keep your number private", onPress: () => router.push("/(tabs)/phone"), color: "#0369A1" },
-        { icon: "users" as const, label: "Travel Group", sub: "Primary + backup contacts", onPress: () => router.push("/(tabs)/plan"), color: "#059669" },
+        { icon: "users" as const, label: "Travel Group", sub: "Primary + backup contacts", onPress: () => router.push("/(tabs)/travel"), color: "#059669" },
       ]
     : [
         { icon: "zap" as const, label: "AI Analysis", sub: "Red flag check", onPress: () => router.push("/(tabs)/ai"), color: colors.primary },
         { icon: "calendar" as const, label: "Plan a Date", sub: "Safety scoring", onPress: () => router.push("/plan/new"), color: "#6D28D9" },
-        { icon: "map" as const, label: "Trip Plans", sub: "Travel safety", onPress: () => router.push("/(tabs)/plan"), color: "#7C3AED" },
+        { icon: "map" as const, label: "Trip Plans", sub: "Travel safety", onPress: () => router.push("/(tabs)/travel"), color: "#7C3AED" },
         { icon: "phone-call" as const, label: "Fake Call", sub: "Instant exit", onPress: () => router.push("/setup-fake-call"), color: "#0369A1" },
         { icon: "message-circle" as const, label: "AI Coach", sub: "Get guidance", onPress: () => router.push("/coach"), color: "#DB2777" },
         { icon: "mic" as const, label: "Record Date", sub: "Private audio", onPress: () => router.push("/record"), color: "#0891B2" },

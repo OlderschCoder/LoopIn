@@ -6,6 +6,7 @@ import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 import { useTravel } from "@/context/TravelContext";
@@ -31,14 +32,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "calendar", selected: "calendar" }} />
         <Label>Plan</Label>
       </NativeTabs.Trigger>
-      {!travelOnly && <NativeTabs.Trigger name="reflect">
-        <Icon sf={{ default: "heart", selected: "heart.fill" }} />
-        <Label>Reflect</Label>
-      </NativeTabs.Trigger>}
-      {!travelOnly && <NativeTabs.Trigger name="locker">
-        <Icon sf={{ default: "lock.shield", selected: "lock.shield.fill" }} />
-        <Label>Locker</Label>
-      </NativeTabs.Trigger>}
+      <NativeTabs.Trigger name="travel">
+        <Icon sf={{ default: "map", selected: "map.fill" }} />
+        <Label>Travel</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -49,6 +46,7 @@ function ClassicTabLayout() {
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
+  const insets = useSafeAreaInsets();
   const { entitlements } = useTravel();
   const travelOnly = Boolean(entitlements?.travelAccess && !entitlements.coreAccess);
 
@@ -64,7 +62,8 @@ function ClassicTabLayout() {
           borderTopWidth: 1,
           borderTopColor: colors.border,
           elevation: 0,
-          height: isWeb ? 84 : 60,
+          height: isWeb ? 84 : 60 + insets.bottom,
+          paddingBottom: isWeb ? 0 : insets.bottom,
         },
         tabBarBackground: () =>
           isIOS ? (
@@ -137,7 +136,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="reflect"
         options={{
-          href: travelOnly ? null : undefined,
+          href: null,
           title: "Reflect",
           tabBarIcon: ({ color }) =>
             isIOS ? (
@@ -150,13 +149,25 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="locker"
         options={{
-          href: travelOnly ? null : undefined,
+          href: null,
           title: "Locker",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="lock.shield" tintColor={color} size={22} />
             ) : (
               <Feather name="lock" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="travel"
+        options={{
+          title: "Travel",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="map" tintColor={color} size={22} />
+            ) : (
+              <Feather name="map" size={22} color={color} />
             ),
         }}
       />

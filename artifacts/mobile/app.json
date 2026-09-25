@@ -2,7 +2,7 @@
   "expo": {
     "name": "LoopIn",
     "slug": "loopin",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "loopin",
@@ -30,7 +30,8 @@
     },
     "android": {
       "package": "com.markbojeun.loopin",
-      "versionCode": 11,
+      "versionCode": 12,
+      "edgeToEdgeEnabled": false,
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -44,6 +45,10 @@
         "android.permission.CAMERA",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
+    },
+    "androidNavigationBar": {
+      "backgroundColor": "#0E0A1E",
+      "barStyle": "light-content"
     },
     "web": {
       "favicon": "./assets/images/icon.png"
