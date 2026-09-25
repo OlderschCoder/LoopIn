@@ -83,9 +83,10 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx5g -Dorg.gradle.workers.max=2
         run: |
           echo "$KEYSTORE_BASE64" | base64 --decode > loopin.keystore
-          ./gradlew assembleRelease --no-daemon \
+          ./gradlew assembleRelease --no-daemon --max-workers=2 \
             -Pandroid.injected.signing.store.file=$(pwd)/loopin.keystore \
             -Pandroid.injected.signing.store.password="$STORE_PASSWORD" \
             -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
@@ -98,8 +99,9 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx5g -Dorg.gradle.workers.max=2
         run: |
-          ./gradlew bundleRelease --no-daemon \
+          ./gradlew bundleRelease --no-daemon --max-workers=2 \
             -Pandroid.injected.signing.store.file=$(pwd)/loopin.keystore \
             -Pandroid.injected.signing.store.password="$STORE_PASSWORD" \
             -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
