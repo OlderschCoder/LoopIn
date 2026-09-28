@@ -35,6 +35,7 @@ export default function PhoneSetupScreen() {
   const [saving, setSaving] = useState(false);
   const [releasing, setReleasing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [existing, setExisting] = useState<PhoneNumberRow | null>(null);
   const [eligibility, setEligibility] = useState<PhoneEligibility | null>(null);
   const [areaCode, setAreaCode] = useState("");
@@ -64,6 +65,7 @@ export default function PhoneSetupScreen() {
 
   async function handleSave() {
     setError(null);
+    setSuccess(null);
     if (!existing && eligibility && !eligibility.eligible) {
       setError(
         eligibility.blockingReasons[0] ??
@@ -75,23 +77,22 @@ export default function PhoneSetupScreen() {
       setError("Enter a 3-digit area code to get a local number.");
       return;
     }
-    if (!realPhone.trim()) {
-      setError("Enter your real phone number so we can connect your calls.");
-      return;
-    }
+    const assigningNumber = !existing;
     setSaving(true);
     try {
       const res = await phone.setup({
         areaCode: areaCode.trim() || undefined,
-        realPhone: realPhone.trim(),
+        realPhone: realPhone.trim() || undefined,
       });
       setExisting(res.number);
+      setAreaCode(res.number.areaCode ?? areaCode.trim());
+      setRealPhone(res.number.ownerRealPhone ?? "");
+      setSuccess(
+        assigningNumber
+          ? `Your private number ${formatPhone(res.number.phoneNumber)} is ready.`
+          : "Your Private Line settings are saved.",
+      );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace("/(tabs)/phone");
-      }
     } catch (e: any) {
       setError(e?.message ?? "Could not set up your number.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -195,9 +196,9 @@ export default function PhoneSetupScreen() {
                 Get your private number
               </Text>
               <Text style={[styles.heroSub, { color: colors.mutedForeground }]}>
-                A real local phone number just for dating apps. Text and call
-                matches without ever exposing your real number. Every
-                conversation is saved to your vault.
+                Choose an area code and LoopIn will assign one available local
+                number. Your real number stays private, and nothing is
+                provisioned until you tap the button below.
               </Text>
             </View>
           )}
@@ -245,7 +246,7 @@ export default function PhoneSetupScreen() {
           {!existing && (
             <>
               <Text style={[styles.label, { color: colors.foreground }]}>
-                Your area code
+                Choose your area code
               </Text>
               <View
                 style={[
@@ -278,7 +279,7 @@ export default function PhoneSetupScreen() {
           )}
 
           <Text style={[styles.label, { color: colors.foreground }]}>
-            Your real phone number
+            Call forwarding number (optional)
           </Text>
           <View
             style={[
@@ -296,9 +297,23 @@ export default function PhoneSetupScreen() {
             />
           </View>
           <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-            Kept completely private. Only used to ring your phone when a match
-            calls you.
+            Skip this for now if you only want your Private Line assigned. Add
+            it later to have calls forwarded to your real phone.
           </Text>
+
+          {success && (
+            <View
+              style={[
+                styles.successCard,
+                { backgroundColor: colors.safeLight, borderColor: colors.safe },
+              ]}
+            >
+              <Feather name="check-circle" size={14} color={colors.safe} />
+              <Text style={[styles.successText, { color: colors.safe }]}>
+                {success}
+              </Text>
+            </View>
+          )}
 
           {error && (
             <View
@@ -490,6 +505,16 @@ const styles = StyleSheet.create({
     padding: 12,
     marginTop: 12,
   },
+  successCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    marginTop: 12,
+  },
+  successText: { fontSize: 13, fontFamily: "Inter_500Medium", flex: 1 },
   errorText: { fontSize: 13, fontFamily: "Inter_500Medium", flex: 1 },
   saveBtn: {
     flexDirection: "row",

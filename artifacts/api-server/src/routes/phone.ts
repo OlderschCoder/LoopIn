@@ -17,6 +17,7 @@ import {
   listOwnedNumbers,
   searchAvailableNumbers,
   buyNumber,
+  configureNumber,
   sendSms,
   createCall,
   fetchRecording,
@@ -133,6 +134,29 @@ router.get("/phone/number", requireAuth, async (req, res) => {
   }
 });
 
+// Report whether this signed-in account can request a private number.
+router.get("/phone/eligibility", requireAuth, async (req, res) => {
+  const userId = getUserId(req);
+  try {
+    const existing = await getUserNumber(userId);
+    const configured = isTelnyxConfigured();
+    res.json({
+      authenticated: true,
+      userId,
+      eligible: configured,
+      existingNumber: existing?.phoneNumber ?? null,
+      purchaseRequired: !existing,
+      purchaseStarted: false,
+      blockingReasons: configured
+        ? []
+        : ["Private-number service is not configured yet."],
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to check phone eligibility");
+    res.status(500).json({ error: "Failed to check phone eligibility." });
+  }
+});
+
 // Set up / provision the user's private number.
 router.post("/phone/setup", requireAuth, async (req, res) => {
   const userId = getUserId(req);
@@ -144,6 +168,7 @@ router.post("/phone/setup", requireAuth, async (req, res) => {
     areaCode?: string;
     realPhone?: string;
   };
+  const requestedAreaCode = String(areaCode ?? "").trim();
 
   const normalizedReal = realPhone ? normalizePhone(realPhone) : null;
   if (realPhone && !normalizedReal) {
@@ -167,6 +192,11 @@ router.post("/phone/setup", requireAuth, async (req, res) => {
       return;
     }
 
+    if (!/^\d{3}$/.test(requestedAreaCode)) {
+      res.status(400).json({ error: "Choose a valid 3-digit area code." });
+      return;
+    }
+
     // Find which numbers are already assigned to other users.
     const allAssigned = await db
       .select({ phoneNumber: phoneNumbersTable.phoneNumber })
@@ -177,40 +207,47 @@ router.post("/phone/setup", requireAuth, async (req, res) => {
 
     let chosen: { phoneNumber: string; twilioSid: string; areaCode: string | null } | null = null;
 
-    // 1) Try to provision a fresh local number in the requested area code.
-    if (areaCode && /^\d{3}$/.test(areaCode)) {
-      try {
-        const available = await searchAvailableNumbers(areaCode);
-        if (available[0]) {
-          const bought = await buyNumber({
-            phoneNumber: available[0].phone_number,
-            connectionId: connId,
-            messagingProfileId: MESSAGING_PROFILE_ID,
-          });
-          chosen = {
-            phoneNumber: bought.phone_number,
-            twilioSid: bought.id,
-            areaCode,
-          };
-        }
-      } catch (err) {
-        req.log.warn({ err }, "Could not provision new number; falling back to existing");
-      }
+    // 1) Reuse an unassigned owned number in the requested area code. This keeps
+    // monthly number costs down and prevents assigning a number from a different city.
+    const owned = await listOwnedNumbers();
+    const free = owned.find((number) =>
+      number.phone_number.startsWith(`+1${requestedAreaCode}`) &&
+      !assignedSet.has(number.phone_number) &&
+      number.status !== "deleted"
+    );
+    if (free) {
+      await configureNumber({
+        numberId: free.id,
+        connectionId: connId,
+        messagingProfileId: MESSAGING_PROFILE_ID,
+      });
+      chosen = {
+        phoneNumber: free.phone_number,
+        twilioSid: free.id,
+        areaCode: requestedAreaCode,
+      };
     }
 
-    // 2) Fallback: assign an existing owned Telnyx number not already taken.
+    // 2) Buy one new SMS/voice-capable local number only when the pool has no match.
     if (!chosen) {
-      const owned = await listOwnedNumbers();
-      const free = owned.find((n) => !assignedSet.has(n.phone_number));
-      if (free) {
-        const ac = free.phone_number.replace(/^\+1/, "").slice(0, 3);
-        chosen = { phoneNumber: free.phone_number, twilioSid: free.id, areaCode: ac };
+      const available = await searchAvailableNumbers(requestedAreaCode);
+      if (available[0]) {
+        const bought = await buyNumber({
+          phoneNumber: available[0].phone_number,
+          connectionId: connId,
+          messagingProfileId: MESSAGING_PROFILE_ID,
+        });
+        chosen = {
+          phoneNumber: bought.phone_number,
+          twilioSid: bought.id,
+          areaCode: requestedAreaCode,
+        };
       }
     }
 
     if (!chosen) {
       res.status(409).json({
-        error: "Could not assign a private number right now. Please try again or contact support.",
+        error: `No private numbers are available in area code ${requestedAreaCode} right now. Try another area code.`,
       });
       return;
     }

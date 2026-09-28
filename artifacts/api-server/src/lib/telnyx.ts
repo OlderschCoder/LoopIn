@@ -6,12 +6,11 @@
 const API_KEY = process.env.TELNYX_API_KEY;
 const BASE = "https://api.telnyx.com/v2";
 export const CONNECTION_ID = process.env.TELNYX_APP_ID ?? "";
-export const MESSAGING_PROFILE_ID = process.env.TELNYX_MESSAGING_PROFILE_ID ?? "40019f14-9c79-4aa6-8ac1-4e57db857775";
+export const MESSAGING_PROFILE_ID = process.env.TELNYX_MESSAGING_PROFILE_ID ?? "";
 
 export function isTelnyxConfigured(): boolean {
-  return Boolean(API_KEY);
+  return Boolean(API_KEY && CONNECTION_ID && MESSAGING_PROFILE_ID);
 }
-
 interface TelnyxError extends Error {
   status?: number;
   telnyxCode?: string;
@@ -73,11 +72,36 @@ export async function searchAvailableNumbers(
   const qs = new URLSearchParams({
     "filter[country_code]": "US",
     "filter[national_destination_code]": areaCode,
-    "filter[features][]": "voice",
+    "filter[features][]": "sms",
+    "filter[phone_number_type]": "local",
+    "filter[best_effort]": "false",
     "filter[limit]": "5",
   });
   const data = await telnyxRequest(`/available_phone_numbers?${qs}`);
-  return Array.isArray(data) ? data.map((n: any) => ({ phone_number: n.phone_number })) : [];
+  if (!Array.isArray(data)) return [];
+  return data
+    .filter((n: any) => {
+      const features = Array.isArray(n?.features)
+        ? n.features.map((feature: any) => typeof feature === "string" ? feature : feature?.name)
+        : [];
+      return features.includes("sms") && features.includes("voice");
+    })
+    .map((n: any) => ({ phone_number: n.phone_number }));
+}
+
+export async function configureNumber(args: {
+  numberId: string;
+  connectionId: string;
+  messagingProfileId: string;
+}): Promise<void> {
+  await telnyxRequest(`/phone_numbers/${encodeURIComponent(args.numberId)}`, {
+    method: "PATCH",
+    json: { connection_id: args.connectionId },
+  });
+  await telnyxRequest(`/phone_numbers/${encodeURIComponent(args.numberId)}/messaging`, {
+    method: "PATCH",
+    json: { messaging_profile_id: args.messagingProfileId },
+  });
 }
 
 export async function buyNumber(args: {
@@ -92,22 +116,18 @@ export async function buyNumber(args: {
   });
   const bought = order?.phone_numbers?.[0] ?? order;
   const numId: string = bought?.id ?? bought?.phone_number_id ?? "";
-
-  // Assign to Call Control App (voice)
-  if (numId && args.connectionId) {
-    await telnyxRequest(`/phone_numbers/${encodeURIComponent(numId)}`, {
-      method: "PATCH",
-      json: { connection_id: args.connectionId },
-    }).catch(() => {/* non-fatal */});
+  if (!numId) {
+    throw new Error("Telnyx purchased the number but did not return its ID.");
   }
 
-  // Assign messaging profile (SMS) — critical for outbound texts
-  if (numId && args.messagingProfileId) {
-    await telnyxRequest(`/phone_numbers/${encodeURIComponent(numId)}/messaging`, {
-      method: "PATCH",
-      json: { messaging_profile_id: args.messagingProfileId },
-    }).catch(() => {/* non-fatal — number is still usable for voice */});
+  if (!args.connectionId || !args.messagingProfileId) {
+    throw new Error("Telnyx voice and messaging configuration is incomplete.");
   }
+  await configureNumber({
+    numberId: numId,
+    connectionId: args.connectionId,
+    messagingProfileId: args.messagingProfileId,
+  });
 
   return {
     id: numId,
