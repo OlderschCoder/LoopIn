@@ -76,6 +76,10 @@ export default function SignInScreen() {
       setActive ?? ((params) => clerk.setActive(params)),
       () => clerk.session?.id,
     );
+    // Do not depend on Clerk's listener notifying AuthGate before this screen
+    // renders again. The session has been verified active above, so take the
+    // user into the app immediately after every successful sign-in path.
+    router.replace("/(tabs)");
   };
 
   /**
