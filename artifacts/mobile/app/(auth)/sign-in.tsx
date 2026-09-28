@@ -13,10 +13,8 @@ import {
 import { useAuth, useClerk, useSSO } from "@clerk/expo";
 import { useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import * as AuthSession from "expo-auth-session";
 import * as Linking from "expo-linking";
 
-import { activateClerkSession } from "@/utils/clerkSession";
 import { claimRotatingTokenNonce } from "@/utils/oauthCallback";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -70,15 +68,13 @@ export default function SignInScreen() {
     sessionId: string,
     setActive?: SetActive,
   ) => {
-    await activateClerkSession(
-      () => clerk.client,
-      sessionId,
-      setActive ?? ((params) => clerk.setActive(params)),
-      () => clerk.session?.id,
-    );
-    // Do not depend on Clerk's listener notifying AuthGate before this screen
-    // renders again. The session has been verified active above, so take the
-    // user into the app immediately after every successful sign-in path.
+    // Clerk's SSO hook returns the activation function that owns this newly
+    // created session. Use it directly: reloading the client before activation
+    // can replace the in-flight SSO state and leave the app signed out even
+    // though Clerk has already created the session server-side.
+    await (setActive ?? ((params) => clerk.setActive(params)))({
+      session: sessionId,
+    });
     router.replace("/(tabs)");
   };
 
@@ -204,7 +200,6 @@ export default function SignInScreen() {
       // which is why sign-in appeared to do nothing at all.
       const { createdSessionId, signIn, signUp, setActive } = await startSSOFlow({
         strategy: "oauth_google",
-        redirectUrl: AuthSession.makeRedirectUri(),
       });
 
       if (createdSessionId) {
@@ -262,10 +257,8 @@ export default function SignInScreen() {
 
     void (async () => {
       const url = await Linking.getInitialURL().catch(() => null);
-      // Match on the nonce Clerk appends, not on a path. The redirect URI here
-      // is AuthSession.makeRedirectUri() with no path, so the SDK's own
-      // "sso-callback" path never appears in the callback URL — a path check
-      // silently disables this whole recovery.
+      // Match on the nonce Clerk appends, not on a path, so the recovery keeps
+      // working with Clerk's standard `sso-callback` redirect.
       if (cancelled) return;
       const nonce = claimRotatingTokenNonce(url);
       if (!nonce) return;

@@ -2,7 +2,7 @@
   "expo": {
     "name": "LoopIn",
     "slug": "loopin",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "loopin",
@@ -30,7 +30,7 @@
     },
     "android": {
       "package": "com.markbojeun.loopin",
-      "versionCode": 12,
+      "versionCode": 13,
       "edgeToEdgeEnabled": false,
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
