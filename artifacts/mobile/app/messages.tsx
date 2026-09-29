@@ -332,8 +332,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 4,
   },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
-  sheetWrap: { justifyContent: "flex-end" },
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  sheetWrap: { flex: 1, justifyContent: "flex-end" },
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,

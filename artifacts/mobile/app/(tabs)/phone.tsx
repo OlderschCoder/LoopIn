@@ -446,8 +446,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 4,
   },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
-  sheetWrap: { justifyContent: "flex-end" },
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  sheetWrap: { flex: 1, justifyContent: "flex-end" },
   sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 12, gap: 8 },
   sheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 12 },
   sheetTitle: { fontSize: 18, fontFamily: "Inter_700Bold", marginBottom: 4 },
