@@ -46,6 +46,9 @@ export default function ConversationScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [calling, setCalling] = useState(false);
+  const [messagingReady, setMessagingReady] = useState(false);
+  const [consentConfirmed, setConsentConfirmed] = useState(false);
+  const [recipientOptedOut, setRecipientOptedOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<PhoneMessage[]>([]);
@@ -59,13 +62,21 @@ export default function ConversationScreen() {
 
   const load = useCallback(async () => {
     try {
-      const convRes = await phone.listConversations();
+      const [numberRes, convRes] = await Promise.all([
+        phone.getNumber(),
+        phone.listConversations(),
+      ]);
+      setMessagingReady(numberRes.messagingReady);
       const match = convRes.conversations.find((c) => c.contactNumber === contactNumber);
       if (match) {
         setConversationId(match.id);
+        setConsentConfirmed(Boolean(match.messagingConsentConfirmedAt));
+        setRecipientOptedOut(match.messagingOptedOut);
         const msgRes = await phone.getMessages(match.id);
         setMessages(msgRes.messages);
       } else {
+        setConsentConfirmed(false);
+        setRecipientOptedOut(false);
         setMessages([]);
       }
       setError(null);
@@ -111,6 +122,21 @@ export default function ConversationScreen() {
   }
 
   async function handleSend() {
+    if (!consentConfirmed) {
+      Alert.alert(
+        "Confirm permission",
+        "Only continue if this person gave you their phone number and agreed to receive texts from you through LoopIn.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "I confirm", onPress: () => void sendMessage(true) },
+        ],
+      );
+      return;
+    }
+    await sendMessage(false);
+  }
+
+  async function sendMessage(recipientConsentConfirmed: boolean) {
     const body = draft.trim();
     if ((!body && !pendingImage) || sending) return;
     setSending(true);
@@ -128,7 +154,9 @@ export default function ConversationScreen() {
         contactName: contactName || undefined,
         body: body || " ",
         mediaUrl,
+        recipientConsentConfirmed,
       });
+      if (recipientConsentConfirmed) setConsentConfirmed(true);
       setConversationId(res.conversationId);
       setDraft("");
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -151,6 +179,8 @@ export default function ConversationScreen() {
       phone.getMessages(res.conversationId)
         .then((msgRes) => {
           if (msgRes?.messages) setMessages(msgRes.messages);
+          setRecipientOptedOut(msgRes.conversation.messagingOptedOut);
+          setConsentConfirmed(Boolean(msgRes.conversation.messagingConsentConfirmedAt));
         })
         .catch(() => { /* non-fatal — optimistic message is already shown */ });
     } catch (e: any) {
@@ -181,7 +211,7 @@ export default function ConversationScreen() {
   }
 
   const topPadding = Platform.OS === "web" ? 16 : insets.top + 8;
-  const canSend = (draft.trim().length > 0 || pendingImage !== null) && !sending;
+  const canSend = messagingReady && !recipientOptedOut && (draft.trim().length > 0 || pendingImage !== null) && !sending;
 
   return (
     <KeyboardAvoidingView
@@ -323,13 +353,31 @@ export default function ConversationScreen() {
         </View>
       )}
 
+      {!messagingReady && (
+        <View style={[styles.messagingPending, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+          <Feather name="clock" size={15} color={colors.mutedForeground} />
+          <Text style={[styles.messagingPendingText, { color: colors.mutedForeground }]}>
+            Texting is waiting on carrier campaign approval. Calling is available.
+          </Text>
+        </View>
+      )}
+
+      {messagingReady && recipientOptedOut && (
+        <View style={[styles.messagingPending, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+          <Feather name="slash" size={15} color={colors.mutedForeground} />
+          <Text style={[styles.messagingPendingText, { color: colors.mutedForeground }]}>
+            This person opted out. They must text START before you can message them again.
+          </Text>
+        </View>
+      )}
+
       {/* Input row */}
       <View style={[styles.inputRow, { borderTopColor: colors.border, paddingBottom: insets.bottom + 8 }]}>
         {/* Photo picker button */}
         <TouchableOpacity
           onPress={pickImage}
           style={[styles.attachBtn, { backgroundColor: colors.muted }]}
-          disabled={sending}
+          disabled={!messagingReady || recipientOptedOut || sending}
         >
           <Feather name="image" size={20} color={colors.mutedForeground} />
         </TouchableOpacity>
@@ -342,6 +390,7 @@ export default function ConversationScreen() {
             value={draft}
             onChangeText={setDraft}
             multiline
+            editable={messagingReady && !recipientOptedOut && !sending}
           />
         </View>
 
@@ -363,6 +412,20 @@ export default function ConversationScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  messagingPending: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderTopWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  messagingPendingText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    lineHeight: 17,
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",

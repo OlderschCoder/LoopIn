@@ -27,6 +27,9 @@ export interface Conversation {
   userId: string;
   contactNumber: string;
   contactName: string | null;
+  messagingConsentConfirmedAt: string | null;
+  messagingOptedOut: boolean;
+  messagingOptedOutAt: string | null;
   lastMessagePreview: string | null;
   lastMessageAt: string;
   createdAt: string;
@@ -200,6 +203,9 @@ export function usePhone() {
       getNumber: (): Promise<{
         number: PhoneNumberRow | null;
         configured: boolean;
+        voiceReady: boolean;
+        messagingReady: boolean;
+        messagingStatus: "ready" | "carrier_campaign_required";
       }> => authed("/phone/number"),
       getEligibility: (): Promise<PhoneEligibility> =>
         authed("/phone/eligibility"),
@@ -242,6 +248,7 @@ export function usePhone() {
         contactName?: string;
         body: string;
         mediaUrl?: string;
+        recipientConsentConfirmed?: boolean;
       }): Promise<{
         ok: boolean;
         messageId: string;
