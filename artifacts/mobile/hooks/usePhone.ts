@@ -99,15 +99,31 @@ export function usePhone() {
   }, [getToken]);
 
   const authed = useCallback(
-    async (path: string, init: RequestInit = {}): Promise<any> => {
+    async (
+      path: string,
+      init: RequestInit = {},
+      timeoutMs = 10_000,
+    ): Promise<any> => {
       if (!BASE_URL) {
         throw new Error("App is not configured — please contact support.");
       }
-      const token = await getTokenRef.current();
+      let tokenTimer: ReturnType<typeof setTimeout> | undefined;
+      const token = await Promise.race([
+        getTokenRef.current(),
+        new Promise<never>((_, reject) => {
+          tokenTimer = setTimeout(
+            () => reject(new Error("Sign-in verification timed out. Please try again.")),
+            timeoutMs,
+          );
+        }),
+      ]).finally(() => {
+        if (tokenTimer) clearTimeout(tokenTimer);
+      });
 
-      // Abort after 10 s so a bad URL fails fast instead of hanging for 60 s.
+      // Ordinary reads fail fast. Provisioning gets a longer bound below because
+      // the carrier must reserve and configure the number before replying.
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 10_000);
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
 
       let res: Response;
       try {
@@ -197,7 +213,7 @@ export function usePhone() {
             method: "POST",
             headers: { "Idempotency-Key": key },
             body: JSON.stringify(body),
-          });
+          }, 45_000);
           if (result?.number) return result;
           if (result?.status === "reconcile") {
             throw new Error(

@@ -44,10 +44,10 @@ export default function PhoneSetupScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const [res, eligibilityResult] = await Promise.all([
-          phone.getNumber(),
-          phone.getEligibility(),
-        ]);
+        // Clerk can serialize native token refreshes. Load these in order so a
+        // refresh cannot leave the second setup request waiting indefinitely.
+        const res = await phone.getNumber();
+        const eligibilityResult = await phone.getEligibility();
         setEligibility(eligibilityResult);
         if (res.number) {
           setExisting(res.number);

@@ -6,7 +6,7 @@ import Constants from "expo-constants";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { AppState, Platform } from "react-native";
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type {
   NewTripPayload,
   TripDetail,
@@ -50,14 +50,19 @@ const TravelContext = createContext<TravelContextValue | null>(null);
 
 export function TravelProvider({ children }: { children: React.ReactNode }) {
   const { isSignedIn, userId, getToken } = useAuth();
+  const getTokenRef = useRef(getToken);
   const [entitlements, setEntitlements] = useState<TravelEntitlements | null>(null);
   const [trips, setTrips] = useState<TripSummary[]>([]);
   const [contactGroups, setContactGroups] = useState<TravelContactGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
+
   const api = useCallback(async <T,>(path: string, init?: RequestInit): Promise<T> => {
-    const token = await getToken();
+    const token = await getTokenRef.current();
     const headers = new Headers(init?.headers);
     if (token) headers.set("Authorization", `Bearer ${token}`);
     if (init?.body && !(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
@@ -68,7 +73,7 @@ export function TravelProvider({ children }: { children: React.ReactNode }) {
     }
     if (response.status === 204) return undefined as T;
     return response.json() as Promise<T>;
-  }, [getToken]);
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!isSignedIn || !userId) return;
@@ -185,7 +190,7 @@ export function TravelProvider({ children }: { children: React.ReactNode }) {
       if (Platform.OS === "web") throw new Error("Encrypted documents are available in the mobile app");
       const allowed = await requireBiometric("Open encrypted travel document");
       if (!allowed) throw new Error("Device biometrics are required to open travel documents");
-      const token = await getToken();
+      const token = await getTokenRef.current();
       const response = await fetch(`${TRAVEL_API_BASE}/api/travel/documents/${id}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       if (!response.ok) throw new Error("Document could not be opened");
       const extension = mimeType === "application/pdf" ? "pdf" : mimeType.split("/")[1] || "bin";
@@ -203,7 +208,7 @@ export function TravelProvider({ children }: { children: React.ReactNode }) {
     deleteDocument: async (id) => {
       await api(`/travel/documents/${id}`, { method: "DELETE" });
     },
-  }), [api, contactGroups, entitlements, error, getToken, loading, refresh, requireBiometric, trips]);
+  }), [api, contactGroups, entitlements, error, loading, refresh, requireBiometric, trips]);
 
   return <TravelContext.Provider value={value}>{children}</TravelContext.Provider>;
 }
