@@ -102,6 +102,12 @@
             }
           }
         }
+      ],
+      [
+        "@twilio/voice-react-native-sdk",
+        {
+          "microphoneUsageDescription": "LoopIn uses your microphone for private in-app calls."
+        }
       ]
     ],
     "experiments": {

@@ -264,7 +264,13 @@ export function usePhone() {
       startCall: (body: {
         to: string;
         contactName?: string;
-      }): Promise<{ ok: boolean; callId: string; status: string }> =>
+      }): Promise<{
+        ok: boolean;
+        callId: string;
+        status: string;
+        accessToken: string;
+        parameters: Record<string, string>;
+      }> =>
         authed("/phone/call", {
           method: "POST",
           headers: { "Idempotency-Key": Crypto.randomUUID() },

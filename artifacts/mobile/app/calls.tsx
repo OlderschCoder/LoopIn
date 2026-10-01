@@ -18,6 +18,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 import {
+  hangUpPrivateVoiceCall,
+  setPrivateVoiceCallMuted,
+  startPrivateVoiceCall,
+  type PrivateCallState,
+} from "@/services/twilioVoice";
+import {
   usePhone,
   formatPhone,
   type PhoneCall,
@@ -40,6 +46,9 @@ export default function CallsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [calling, setCalling] = useState(false);
+  const [callState, setCallState] = useState<PrivateCallState | null>(null);
+  const [callError, setCallError] = useState<string | null>(null);
+  const [muted, setMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [number, setNumber] = useState<PhoneNumberRow | null>(null);
   const [calls, setCalls] = useState<PhoneCall[]>([]);
@@ -71,29 +80,46 @@ export default function CallsScreen() {
   async function handleCall() {
     const to = dialNumber.trim();
     if (!to || calling) return;
-    if (!number?.ownerRealPhone) {
-      Alert.alert(
-        "Add your phone number",
-        "Add your real phone number in setup so we can connect your calls.",
-        [{ text: "OK", onPress: () => router.push("/phone-setup") }],
-      );
-      return;
-    }
     setCalling(true);
+    setCallError(null);
     try {
-      await phone.startCall({ to });
+      const result = await phone.startCall({ to });
+      await startPrivateVoiceCall({
+        accessToken: result.accessToken,
+        parameters: result.parameters,
+        displayName: formatPhone(to),
+        onState: (state, message) => {
+          setCallState(state);
+          if (message) setCallError(message);
+          if (["ended", "failed"].includes(state)) {
+            setCalling(false);
+            setMuted(false);
+            load();
+          }
+        },
+      });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setDialNumber("");
-      Alert.alert(
-        "Connecting your call",
-        "Your phone will ring shortly. Answer it, and we'll connect you through your private number. The call is recorded for your safety.",
-      );
-      load();
     } catch (e: any) {
+      setCallState("failed");
+      setCallError(e?.message ?? "Could not start the call.");
       Alert.alert("Call failed", e?.message ?? "Could not start the call.");
-    } finally {
       setCalling(false);
     }
+  }
+
+  async function handleHangUp() {
+    await hangUpPrivateVoiceCall().catch(() => undefined);
+    setCallState("ended");
+    setCalling(false);
+    setMuted(false);
+    load();
+  }
+
+  async function handleMute() {
+    const next = !muted;
+    const applied = await setPrivateVoiceCallMuted(next);
+    if (applied === next) setMuted(next);
   }
 
   const topPadding = Platform.OS === "web" ? 24 : insets.top + 8;
@@ -166,9 +192,23 @@ export default function CallsScreen() {
               </TouchableOpacity>
             </View>
             <Text style={[styles.dialHint, { color: colors.mutedForeground }]}>
-              We'll ring your phone, then connect you. They see your private number, and
-              the call is recorded for your safety.
+              The call connects inside LoopIn. They see only your private number, and the
+              call is recorded for your safety.
             </Text>
+            {callState && !["ended", "failed"].includes(callState) && (
+              <View style={styles.activeCallRow}>
+                <Text style={[styles.activeCallText, { color: colors.foreground }]}>
+                  {callState === "connected" ? "Call connected" : `${callState}…`}
+                </Text>
+                <TouchableOpacity onPress={handleMute} style={[styles.callControl, { borderColor: colors.border }]}>
+                  <Feather name={muted ? "mic-off" : "mic"} size={18} color={colors.foreground} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleHangUp} style={[styles.callControl, { backgroundColor: colors.sos }]}>
+                  <Feather name="phone-off" size={18} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            )}
+            {callError && <Text style={[styles.errorText, { color: colors.sos }]}>{callError}</Text>}
           </View>
 
           {error && <Text style={[styles.errorText, { color: colors.sos }]}>{error}</Text>}
@@ -253,6 +293,9 @@ const styles = StyleSheet.create({
   dialInput: { fontSize: 16, fontFamily: "Inter_400Regular", paddingVertical: 12 },
   dialBtn: { width: 52, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   dialHint: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 10, lineHeight: 17 },
+  activeCallRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 14 },
+  activeCallText: { flex: 1, fontSize: 14, fontFamily: "Inter_600SemiBold", textTransform: "capitalize" },
+  callControl: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   errorText: { fontSize: 13, fontFamily: "Inter_500Medium", marginBottom: 8 },
   sectionTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", marginBottom: 10 },
   empty: { alignItems: "center", gap: 8, padding: 28, borderRadius: 16, borderWidth: 1 },
