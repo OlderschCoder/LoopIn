@@ -9,6 +9,7 @@ import {
   clerkProxyMiddleware,
 } from "./middlewares/clerkProxyMiddleware";
 import router from "./routes";
+import twilioWebhooksRouter from "./routes/twilioWebhooks";
 import { logger } from "./lib/logger";
 
 // Ensure uploads directory exists
@@ -49,6 +50,10 @@ app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.use(cors({ credentials: true, origin: true }));
 app.use(express.json({ limit: "15mb" }));
 app.use(express.urlencoded({ extended: true, limit: "15mb" }));
+
+// Twilio callbacks cannot present a Clerk user session. They are protected by
+// the per-deployment webhook secret and must be mounted before Clerk auth.
+app.use("/api", twilioWebhooksRouter);
 
 app.use(clerkMiddleware());
 

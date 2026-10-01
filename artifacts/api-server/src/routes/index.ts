@@ -5,7 +5,6 @@ import analyzeRouter from "./analyze";
 import coachRouter from "./coach";
 import userDataRouter from "./userData";
 import phoneRouter from "./phone";
-import twilioWebhooksRouter from "./twilioWebhooks";
 import telnyxWebhooksRouter from "./telnyxWebhooks";
 import socialProofRouter from "./socialProof";
 
@@ -17,7 +16,6 @@ router.use(analyzeRouter);
 router.use(coachRouter);
 router.use(userDataRouter);
 router.use(phoneRouter);
-router.use(twilioWebhooksRouter);
 router.use(telnyxWebhooksRouter);
 router.use(socialProofRouter);
 

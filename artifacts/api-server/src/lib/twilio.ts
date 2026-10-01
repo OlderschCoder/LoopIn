@@ -12,7 +12,12 @@ import { ReplitConnectors } from "@replit/connectors-sdk";
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 
 export function isTwilioConfigured(): boolean {
-  return Boolean(ACCOUNT_SID);
+  return Boolean(
+    ACCOUNT_SID &&
+      (process.env.TWILIO_AUTH_TOKEN ||
+        ((process.env.TWILIO_API_KEY_SID || process.env.TWILIO_API_KEY) &&
+          process.env.TWILIO_API_KEY_SECRET)),
+  );
 }
 
 function buildAuth(): string | null {
@@ -20,7 +25,7 @@ function buildAuth(): string | null {
   if (authToken && ACCOUNT_SID) {
     return "Basic " + Buffer.from(`${ACCOUNT_SID}:${authToken}`).toString("base64");
   }
-  const apiKey = process.env.TWILIO_API_KEY;
+  const apiKey = process.env.TWILIO_API_KEY_SID || process.env.TWILIO_API_KEY;
   const apiKeySecret = process.env.TWILIO_API_KEY_SECRET;
   if (apiKey && apiKeySecret) {
     return "Basic " + Buffer.from(`${apiKey}:${apiKeySecret}`).toString("base64");

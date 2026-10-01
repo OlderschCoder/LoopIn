@@ -13,17 +13,15 @@ import {
 import { requireAuth, getUserId } from "../middlewares/requireAuth";
 import { buildWebhookUrls } from "../lib/publicUrl";
 import {
-  isTelnyxConfigured,
+  isTwilioConfigured,
   listOwnedNumbers,
   searchAvailableNumbers,
   buyNumber,
-  configureNumber,
+  updateNumberWebhooks,
   sendSms,
   createCall,
   fetchRecording,
-  CONNECTION_ID,
-  MESSAGING_PROFILE_ID,
-} from "../lib/telnyx";
+} from "../lib/twilio";
 
 const router = Router();
 
@@ -127,7 +125,7 @@ router.get("/phone/number", requireAuth, async (req, res) => {
   const userId = getUserId(req);
   try {
     const row = await getUserNumber(userId);
-    res.json({ number: row, configured: isTelnyxConfigured() });
+    res.json({ number: row, configured: isTwilioConfigured() });
   } catch (err) {
     req.log.error({ err }, "Failed to load phone number");
     res.status(500).json({ error: "Failed to load phone number" });
@@ -139,7 +137,7 @@ router.get("/phone/eligibility", requireAuth, async (req, res) => {
   const userId = getUserId(req);
   try {
     const existing = await getUserNumber(userId);
-    const configured = isTelnyxConfigured();
+    const configured = isTwilioConfigured();
     res.json({
       authenticated: true,
       userId,
@@ -160,7 +158,7 @@ router.get("/phone/eligibility", requireAuth, async (req, res) => {
 // Set up / provision the user's private number.
 router.post("/phone/setup", requireAuth, async (req, res) => {
   const userId = getUserId(req);
-  if (!isTelnyxConfigured()) {
+  if (!isTwilioConfigured()) {
     res.status(503).json({ error: "Phone service is not configured." });
     return;
   }
@@ -203,27 +201,24 @@ router.post("/phone/setup", requireAuth, async (req, res) => {
       .from(phoneNumbersTable);
     const assignedSet = new Set(allAssigned.map((r) => r.phoneNumber));
 
-    const connId = CONNECTION_ID;
-
     let chosen: { phoneNumber: string; twilioSid: string; areaCode: string | null } | null = null;
+    const hooks = buildWebhookUrls(req);
 
     // 1) Reuse an unassigned owned number in the requested area code. This keeps
     // monthly number costs down and prevents assigning a number from a different city.
     const owned = await listOwnedNumbers();
     const free = owned.find((number) =>
       number.phone_number.startsWith(`+1${requestedAreaCode}`) &&
-      !assignedSet.has(number.phone_number) &&
-      number.status !== "deleted"
+      !assignedSet.has(number.phone_number)
     );
     if (free) {
-      await configureNumber({
-        numberId: free.id,
-        connectionId: connId,
-        messagingProfileId: MESSAGING_PROFILE_ID,
+      await updateNumberWebhooks(free.sid, {
+        smsUrl: hooks.smsUrl,
+        voiceUrl: hooks.voiceUrl,
       });
       chosen = {
         phoneNumber: free.phone_number,
-        twilioSid: free.id,
+        twilioSid: free.sid,
         areaCode: requestedAreaCode,
       };
     }
@@ -234,12 +229,14 @@ router.post("/phone/setup", requireAuth, async (req, res) => {
       if (available[0]) {
         const bought = await buyNumber({
           phoneNumber: available[0].phone_number,
-          connectionId: connId,
-          messagingProfileId: MESSAGING_PROFILE_ID,
+          smsUrl: hooks.smsUrl,
+          smsStatusUrl: hooks.smsStatusUrl,
+          voiceUrl: hooks.voiceUrl,
+          voiceStatusUrl: hooks.voiceStatusUrl,
         });
         chosen = {
           phoneNumber: bought.phone_number,
-          twilioSid: bought.id,
+          twilioSid: bought.sid,
           areaCode: requestedAreaCode,
         };
       }
@@ -351,7 +348,7 @@ router.post("/phone/messages", requireAuth, async (req, res) => {
       to: toNumber,
       body: msgBody || " ",
       mediaUrl,
-      webhookUrl: hooks.smsStatusUrl,
+      statusCallback: hooks.smsStatusUrl,
     });
     const id = randomUUID();
     const now = new Date();
@@ -378,7 +375,7 @@ router.post("/phone/messages", requireAuth, async (req, res) => {
   }
 });
 
-// Start a masked outbound call via Telnyx Call Control.
+// Start a masked outbound call via Twilio.
 // Rings user's real phone first; on answer, bridges to the contact.
 router.post("/phone/call", requireAuth, async (req, res) => {
   const userId = getUserId(req);
@@ -399,9 +396,8 @@ router.post("/phone/call", requireAuth, async (req, res) => {
       return;
     }
 
-    const connId = CONNECTION_ID;
-    if (!connId) {
-      res.status(503).json({ error: "Voice service not configured (missing TELNYX_APP_ID)." });
+    if (!isTwilioConfigured()) {
+      res.status(503).json({ error: "Voice service is not configured." });
       return;
     }
 
@@ -420,27 +416,17 @@ router.post("/phone/call", requireAuth, async (req, res) => {
       createdAt: new Date(),
     });
 
-    // Encode state so the webhook knows what to do when the user answers
-    const clientState = Buffer.from(JSON.stringify({
-      type: "outbound_leg_a",
-      userId,
-      callId,
-      from: mine.phoneNumber,   // private number
-      to: toNumber,             // contact to bridge to
-    })).toString("base64");
-
     // Ring the user's real phone
     const call = await createCall({
-      connectionId: connId,
       from: mine.phoneNumber,
       to: mine.ownerRealPhone,
-      clientState,
-      webhookUrl: hooks.voiceUrl,
+      url: `${hooks.voiceOutboundUrl}&to=${encodeURIComponent(toNumber)}`,
+      statusCallback: hooks.voiceStatusUrl,
     });
 
     // Store call control ID
     await db.update(callsTable)
-      .set({ status: "ringing", twilioCallSid: call.call_control_id })
+      .set({ status: "ringing", twilioCallSid: call.sid })
       .where(eq(callsTable.id, callId));
 
     res.json({ ok: true, callId, status: "ringing" });

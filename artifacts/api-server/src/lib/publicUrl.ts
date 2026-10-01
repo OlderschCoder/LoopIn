@@ -1,6 +1,8 @@
 import type { Request } from "express";
 
 export function getPublicBaseUrl(req?: Request): string {
+  const configured = process.env.PUBLIC_BASE_URL?.trim().replace(/\/$/, "");
+  if (configured) return configured;
   if (req) {
     const protoHeader = req.headers["x-forwarded-proto"];
     const proto =
@@ -26,13 +28,12 @@ export function buildWebhookUrls(req: Request) {
   const base = getPublicBaseUrl(req);
   const k = encodeURIComponent(WEBHOOK_SECRET);
   return {
-    // Telnyx routes
-    smsUrl: `${base}/api/telnyx/sms-inbound?k=${k}`,
-    voiceUrl: `${base}/api/telnyx/call-events?k=${k}`,
-    voiceOutboundUrl: `${base}/api/telnyx/call-events?k=${k}`,
-    voiceStatusUrl: `${base}/api/telnyx/call-events?k=${k}`,
-    recordingStatusUrl: `${base}/api/telnyx/call-events?k=${k}`,
-    smsStatusUrl: `${base}/api/telnyx/sms-status?k=${k}`,
+    smsUrl: `${base}/api/twilio/sms-inbound?k=${k}`,
+    voiceUrl: `${base}/api/twilio/voice-inbound?k=${k}`,
+    voiceOutboundUrl: `${base}/api/twilio/voice-outbound?k=${k}`,
+    voiceStatusUrl: `${base}/api/twilio/voice-status?k=${k}`,
+    recordingStatusUrl: `${base}/api/twilio/recording-status?k=${k}`,
+    smsStatusUrl: `${base}/api/twilio/sms-status?k=${k}`,
   };
 }
 
